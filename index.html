@@ -6,23 +6,17 @@
     <title>팔달리틀 플레이어 & 다운로더</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        /* 기본 스타일 */
         body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Pretendard', -apple-system, sans-serif; padding: 20px 0; }
-        
-        /* 플레이어 카드 메인 박스 */
         .player-card { width: 90%; max-width: 850px; background: #1e1e1e; padding: 30px 20px 20px 20px; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid #333; }
         
-        /* 📣 응원 문구 스타일 (추가됨) */
         .cheer-message { margin-bottom: 25px; padding: 0 10px; }
         .cheer-title { font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 8px; line-height: 1.3; word-break: keep-all; }
         .cheer-subtitle { font-size: 1rem; font-weight: 400; color: #aaa; margin-bottom: 15px; line-height: 1.5; word-break: keep-all; }
-        .cheer-highlight { color: #ffeb3b; font-weight: 700; } /* 강조용 노란색 */
-        .cheer-fighting { font-size: 1.2rem; font-weight: 700; color: #00e676; margin-top: 10px; display: block; } /* 화이팅 초록색 */
+        .cheer-highlight { color: #ffeb3b; font-weight: 700; }
+        .cheer-fighting { font-size: 1.2rem; font-weight: 700; color: #00e676; margin-top: 10px; display: block; }
 
-        /* 비디오 영역 */
         video { width: 100%; border-radius: 12px; background: #000; margin-bottom: 20px; outline: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
         
-        /* 컨트롤 영역 */
         .controls { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
         select { padding: 12px 15px; border-radius: 8px; font-size: 15px; font-weight: bold; background: #333; color: white; border: 1px solid #555; cursor: pointer; outline: none; transition: 0.2s; }
         select:hover { border-color: #777; }
@@ -32,10 +26,8 @@
         .btn-download:hover { background: #1565c0; }
         button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
         
-        /* 진행 상황 안내 */
         #progress { margin-top: 20px; font-size: 14px; color: #00e676; display: none; font-weight: bold; background: rgba(0, 230, 118, 0.1); padding: 10px; border-radius: 8px; }
         
-        /* 모바일 대응 */
         @media (max-width: 600px) {
             .cheer-title { font-size: 1.2rem; }
             .cheer-subtitle { font-size: 0.9rem; }
@@ -49,10 +41,10 @@
 <div class="player-card">
     <div class="cheer-message">
         <div class="cheer-title">
-            <span class="cheer-highlight">  </span>
+            <span class="cheer-highlight"></span>
         </div>
         <div class="cheer-subtitle">
-            세상에서 가장 멋진 팔달 리틀 선수들을 언제나 응원합니다.<br>
+            세상에서 가장 멋진 팔달 리틀 선수들의 도전을 언제나 응원합니다.<br>
             <span class="cheer-fighting">팔달 리틀 화이팅! 🔥</span>
         </div>
     </div>
@@ -75,47 +67,21 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const progressText = document.getElementById('progress');
     const formatSelect = document.getElementById('formatSelect');
-    
-    // URL에서 ?url=M3U8주소 가져오기
     const m3u8Url = new URLSearchParams(window.location.search).get('url');
 
-    // --- 1. 재생 기능 개선 (HLS.js 최적화 및 에러 핸들링) ---
     if (m3u8Url) {
         if (Hls.isSupported()) {
-            const hls = new Hls({
-                maxMaxBufferLength: 60, // 버퍼링 최적화
-                enableWorker: true      // 성능 향상을 위해 Web Worker 사용
-            });
-            
+            const hls = new Hls({ maxMaxBufferLength: 60, enableWorker: true });
             hls.loadSource(m3u8Url);
             hls.attachMedia(video);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                // 자동재생은 브라우저 정책으로 막힐 수 있으므로 사용자가 재생하도록 유도
-                console.log("HLS 매니페스트 파싱 완료, 재생 준비됨");
-            });
-
-            // 네트워크 오류나 미디어 오류 발생 시 자동 복구 시도
             hls.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            console.warn("네트워크 오류 발생, 복구 시도 중...");
-                            hls.startLoad();
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            console.warn("미디어 오류 발생, 복구 시도 중...");
-                            hls.recoverMediaError();
-                            break;
-                        default:
-                            hls.destroy();
-                            console.error("치명적인 오류로 재생을 중단합니다.");
-                            break;
-                    }
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+                    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+                    else hls.destroy();
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari 등 네이티브 지원 브라우저용 (아이폰 등)
             video.src = m3u8Url;
         }
     } else {
@@ -126,16 +92,29 @@
         downloadBtn.disabled = true;
     }
 
-    // --- 2. 다운로드 기능 개선 (병렬 다운로드 및 스마트폰 TS 권장) ---
+    // 날짜 추출 헬퍼 함수
+    function extractDate(text, url) {
+        // 1. M3U8 내부 태그에서 날짜 추출 시도 (예: 2023-10-27)
+        const dateFromTag = text.match(/#EXT-X-PROGRAM-DATE-TIME:([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+        if (dateFromTag) return dateFromTag[1];
+
+        // 2. URL 주소에서 날짜 추출 시도 (예: 20231027, 2023-10-27, 2023_10_27)
+        // 20xx년 형태의 8자리 숫자를 찾습니다.
+        const dateFromUrl = url.match(/(20\d{2})[-_]?([0-1]\d)[-_]?([0-3]\d)/);
+        if (dateFromUrl) return `${dateFromUrl[1]}-${dateFromUrl[2]}-${dateFromUrl[3]}`;
+
+        // 3. 둘 다 실패하면 기본 이름 반환
+        return "팔달리틀_경기영상";
+    }
+
     async function startDownload() {
         if (!m3u8Url) return;
         
         const selectedFormat = formatSelect.value;
         
-        // 스마트폰 사용자에게는 TS 포맷을 강력 권장하는 안내창 표시
         if (navigator.userAgent.match(/Android|iPhone|iPad|iPod/i) && selectedFormat === 'mp4') {
-            if (!confirm("스마트폰 갤러리에서는 .MP4로 저장 시 재생이 안 될 수 있습니다.\n\nVLC 같은 외부 플레이어 앱으로 시청하시려면 .TS (원본 권장) 포맷을 선택해 주세요.\n\n그래도 MP4로 다운로드하시겠습니까?")) {
-                return; // 취소 누르면 다운로드 중단
+            if (!confirm("스마트폰에서는 .MP4로 저장 시 갤러리에서 재생이 안 될 수 있습니다.\n\n안정적인 시청을 원하시면 .TS 포맷을 권장합니다.\n\n그래도 MP4로 다운로드하시겠습니까?")) {
+                return;
             }
         }
         
@@ -143,33 +122,33 @@
         formatSelect.disabled = true;
         progressText.style.display = 'block';
         progressText.style.color = '#00e676';
-        progressText.innerText = "M3U8 목록 분석 중...";
+        progressText.innerText = "M3U8 목록 분석 및 날짜 확인 중...";
 
         try {
             const response = await fetch(m3u8Url);
             if (!response.ok) throw new Error("M3U8 파일을 가져오는 데 실패했습니다.");
             const text = await response.text();
             
-            // 향상된 파싱: #으로 시작하지 않는 유효한 텍스트 줄을 추출
+            // 날짜 추출 로직 실행!
+            const gameDate = extractDate(text, m3u8Url);
+            // 최종 파일명 조합 (예: 2023-10-27_팔달리틀.ts 또는 팔달리틀_경기영상.ts)
+            const finalFileName = gameDate === "팔달리틀_경기영상" ? gameDate : `${gameDate}_팔달리틀`;
+
             const lines = text.split('\n').map(line => line.trim());
             const tsUrls = lines.filter(line => line && !line.startsWith('#'));
             
             if (tsUrls.length === 0) {
-                alert("영상 조각을 찾을 수 없습니다. (마스터 M3U8이거나 접근이 차단됨)");
+                alert("영상 조각을 찾을 수 없습니다.");
                 downloadBtn.disabled = false;
                 formatSelect.disabled = false;
                 progressText.innerText = "다운로드 불가";
                 return;
             }
 
-            if (text.includes('#EXT-X-KEY')) {
-                alert("주의: 이 영상은 암호화(DRM)되어 있어 다운로드 후 재생이 안 될 수 있습니다.");
-            }
-
             const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
             let combinedBlob = new Array(tsUrls.length);
 
-            const CONCURRENCY_LIMIT = 5; // 동시 다운로드 개수
+            const CONCURRENCY_LIMIT = 5;
             let downloadedCount = 0;
 
             progressText.innerText = `조각 다운로드 준비 중... (총 ${tsUrls.length}개)`;
@@ -181,59 +160,42 @@
                         const tsRes = await fetch(fullUrl);
                         if (!tsRes.ok) throw new Error(`HTTP error! status: ${tsRes.status}`);
                         const tsBlob = await tsRes.blob();
-                        combinedBlob[index] = tsBlob; // 원래 순서대로 저장
+                        combinedBlob[index] = tsBlob;
                         
                         downloadedCount++;
                         progressText.innerText = `조각 다운로드 중... (${downloadedCount} / ${tsUrls.length})`;
                     } catch (e) {
-                        console.error(`${index}번째 조각 다운로드 실패`, e);
-                        // 실패한 조각은 undefined로 남음
+                        console.error(`${index}번째 다운로드 실패`, e);
                     }
                 }
             }
 
-            // 병렬 다운로드 실행
             const entries = tsUrls.entries();
             const workers = Array(CONCURRENCY_LIMIT).fill(entries).map(downloadWorker);
             await Promise.all(workers);
 
             progressText.innerText = "파일 병합 중... (파일이 크면 잠시 멈출 수 있습니다)";
             
-            // 다운로드 실패한 조각(undefined) 제외하고 병합
             const validBlobs = combinedBlob.filter(blob => blob !== undefined);
-            
-            if (validBlobs.length < tsUrls.length) {
-                if (!confirm(`일부 영상 조각(${tsUrls.length - validBlobs.length}개) 다운로드에 실패했습니다.\n\n끊김이 있을 수 있습니다. 합쳐서 저장하시겠습니까?`)) {
-                    throw new Error("다운로드 취소");
-                }
-            }
-            
             const mimeType = selectedFormat === 'mp4' ? 'video/mp4' : 'video/mp2t';
             const finalBlob = new Blob(validBlobs, { type: mimeType });
             const downloadUrl = URL.createObjectURL(finalBlob);
             
-            // 현재 날짜로 파일명 생성 (예: 2023-10-27_팔달리틀.ts)
-            const today = new Date().toISOString().slice(0, 10);
-            
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = `${today}_팔달리틀.${selectedFormat}`;
+            // 여기서 추출된 날짜 기반 파일명이 적용됩니다!
+            a.download = `${finalFileName}.${selectedFormat}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             
-            // 메모리 해제
             URL.revokeObjectURL(downloadUrl);
             
             progressText.innerText = "다운로드 완료! 🎉";
         } catch (error) {
             console.error(error);
             progressText.style.color = '#ff5252';
-            if (error.message === "다운로드 취소") {
-                progressText.innerText = "다운로드가 취소되었습니다.";
-            } else {
-                progressText.innerText = "오류 발생: CORS 정책 차단 또는 네트워크 문제";
-            }
+            progressText.innerText = "오류 발생: 네트워크 문제 또는 취소됨";
         } finally {
             downloadBtn.disabled = false;
             formatSelect.disabled = false;
