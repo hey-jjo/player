@@ -6,24 +6,24 @@
     <title>Ultimate M3U8 Player & Downloader</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Pretendard', sans-serif; }
+        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Pretendard', -apple-system, sans-serif; }
         .player-card { width: 90%; max-width: 850px; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
-        video { width: 100%; border-radius: 10px; background: #000; margin-bottom: 20px; }
+        video { width: 100%; border-radius: 10px; background: #000; margin-bottom: 20px; outline: none; }
         .controls { display: flex; gap: 15px; justify-content: center; }
-        button { padding: 12px 25px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .btn-play { background: #00c853; color: white; }
+        button { padding: 12px 25px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 15px; }
         .btn-download { background: #2979ff; color: white; }
+        .btn-download:hover { background: #1565c0; }
         button:disabled { background: #555; cursor: not-allowed; }
-        #progress { margin-top: 15px; font-size: 14px; color: #00e676; display: none; }
+        #progress { margin-top: 15px; font-size: 14px; color: #00e676; display: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="player-card">
-    <video id="video" controls autoplay playsinline></video>
+    <video id="video" controls playsinline></video>
     
     <div class="controls">
-        <button class="btn-download" id="downloadBtn" onclick="startDownload()">웹에서 직접 다운로드 (TS 합치기)</button>
+        <button class="btn-download" id="downloadBtn" onclick="startDownload()">웹에서 직접 다운로드 (고속 병합)</button>
     </div>
     
     <div id="progress">준비 중...</div>
@@ -35,65 +35,134 @@
     const progressText = document.getElementById('progress');
     const m3u8Url = new URLSearchParams(window.location.search).get('url');
 
-    // 1. 재생 기능
+    // --- 1. 재생 기능 개선 (HLS.js 최적화 및 에러 핸들링) ---
     if (m3u8Url) {
         if (Hls.isSupported()) {
-            const hls = new Hls();
+            const hls = new Hls({
+                maxMaxBufferLength: 60, // 버퍼링 최적화
+                enableWorker: true      // 성능 향상을 위해 Web Worker 사용
+            });
+            
             hls.loadSource(m3u8Url);
             hls.attachMedia(video);
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                // 브라우저 정책상 음소거가 아니면 자동재생이 막힐 수 있어 자동재생은 뺐습니다.
+                // 자동재생을 원하시면 video.play()를 주석 해제하세요.
+                // video.play().catch(() => console.log("자동재생이 브라우저 정책에 의해 차단되었습니다."));
+            });
+
+            // 네트워크 오류나 미디어 오류 발생 시 자동 복구 시도
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.warn("네트워크 오류 발생, 복구 시도 중...");
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.warn("미디어 오류 발생, 복구 시도 중...");
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            hls.destroy();
+                            console.error("치명적인 오류로 재생을 중단합니다.");
+                            break;
+                    }
+                }
+            });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari 등 네이티브 지원 브라우저용
             video.src = m3u8Url;
         }
+    } else {
+        progressText.style.display = 'block';
+        progressText.style.color = '#ff5252';
+        progressText.innerText = "URL 파라미터가 없습니다. (?url=M3U8주소 형식으로 접속하세요)";
+        downloadBtn.disabled = true;
     }
 
-    // 2. 웹 브라우저 내 직접 다운로드 기능 (TS 수집)
+    // --- 2. 다운로드 기능 개선 (병렬 다운로드 및 메모리 최적화) ---
     async function startDownload() {
         if (!m3u8Url) return;
         
         downloadBtn.disabled = true;
         progressText.style.display = 'block';
+        progressText.style.color = '#00e676';
         progressText.innerText = "M3U8 목록 분석 중...";
 
         try {
             const response = await fetch(m3u8Url);
             const text = await response.text();
-            const lines = text.split('\n');
-            const tsUrls = lines.filter(line => line.endsWith('.ts') || line.includes('.ts?'));
+            
+            // 향상된 파싱: #으로 시작하지 않는 유효한 텍스트 줄을 추출
+            const lines = text.split('\n').map(line => line.trim());
+            const tsUrls = lines.filter(line => line && !line.startsWith('#'));
             
             if (tsUrls.length === 0) {
-                alert("TS 파일 목록을 찾을 수 없습니다. (보안 차단 가능성)");
+                alert("영상 조각을 찾을 수 없습니다. (마스터 M3U8이거나 접근이 차단됨)");
+                downloadBtn.disabled = false;
+                progressText.innerText = "다운로드 불가";
                 return;
             }
 
-            const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
-            let combinedBlob = [];
-
-            for (let i = 0; i < tsUrls.length; i++) {
-                const fullUrl = tsUrls[i].startsWith('http') ? tsUrls[i] : baseUrl + tsUrls[i];
-                progressText.innerText = `조각 다운로드 중... (${i + 1} / ${tsUrls.length})`;
-                
-                const tsRes = await fetch(fullUrl);
-                const tsBlob = await tsRes.blob();
-                combinedBlob.push(tsBlob);
+            if (text.includes('#EXT-X-KEY')) {
+                alert("주의: 이 영상은 암호화(DRM)되어 있어 다운로드 후 재생이 안 될 수 있습니다.");
             }
 
-            progressText.innerText = "파일 합치는 중... 잠시만 기다려주세요.";
-            const finalBlob = new Blob(combinedBlob, { type: 'video/mp2t' });
+            const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
+            let combinedBlob = new Array(tsUrls.length);
+
+            const CONCURRENCY_LIMIT = 5; // 동시 다운로드 개수 (5개가 안정적)
+            let downloadedCount = 0;
+
+            progressText.innerText = `조각 다운로드 준비 중... (총 ${tsUrls.length}개)`;
+
+            async function downloadWorker(iterator) {
+                for (let [index, url] of iterator) {
+                    const fullUrl = url.startsWith('http') ? url : baseUrl + url;
+                    try {
+                        const tsRes = await fetch(fullUrl);
+                        if (!tsRes.ok) throw new Error(`HTTP error! status: ${tsRes.status}`);
+                        const tsBlob = await tsRes.blob();
+                        combinedBlob[index] = tsBlob; // 원래 순서대로 저장
+                        
+                        downloadedCount++;
+                        progressText.innerText = `조각 다운로드 중... (${downloadedCount} / ${tsUrls.length})`;
+                    } catch (e) {
+                        console.error(`${index}번째 조각 다운로드 실패`, e);
+                    }
+                }
+            }
+
+            // 병렬 다운로드 실행
+            const entries = tsUrls.entries();
+            const workers = Array(CONCURRENCY_LIMIT).fill(entries).map(downloadWorker);
+            await Promise.all(workers);
+
+            progressText.innerText = "파일 병합 중... (파일이 크면 잠시 멈출 수 있습니다)";
+            
+            // 다운로드 실패한 조각(undefined) 제외하고 병합
+            const validBlobs = combinedBlob.filter(blob => blob !== undefined);
+            const finalBlob = new Blob(validBlobs, { type: 'video/mp2t' });
             const downloadUrl = URL.createObjectURL(finalBlob);
             
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = "video_download.ts"; // 합쳐진 TS 파일로 저장
+            a.download = "video_download.ts";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             
+            // 메모리 해제
+            URL.revokeObjectURL(downloadUrl);
+            
             progressText.innerText = "다운로드 완료!";
-            downloadBtn.disabled = false;
-
         } catch (error) {
             console.error(error);
-            progressText.innerText = "오류 발생: 보안(CORS) 문제로 웹 직접 다운로드가 막혔습니다.";
+            progressText.style.color = '#ff5252';
+            progressText.innerText = "오류 발생: CORS 정책에 의해 차단되었거나 네트워크 문제입니다.";
+        } finally {
             downloadBtn.disabled = false;
         }
     }
