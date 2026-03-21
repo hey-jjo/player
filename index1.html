@@ -1,204 +1,177 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팔달 리틀 응원 플레이어 & 다운로더</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Pretendard', -apple-system, sans-serif; padding: 20px 0; }
-        .player-card { width: 90%; max-width: 850px; background: #1e1e1e; padding: 30px 20px 20px 20px; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid #333; }
-        
-        .cheer-message { margin-bottom: 25px; padding: 0 10px; }
-        .cheer-title { font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 8px; line-height: 1.3; word-break: keep-all; }
-        .cheer-subtitle { font-size: 1rem; font-weight: 400; color: #aaa; margin-bottom: 15px; line-height: 1.5; word-break: keep-all; }
-        .cheer-highlight { color: #ffeb3b; font-weight: 700; }
-        .cheer-fighting { font-size: 1.2rem; font-weight: 700; color: #00e676; margin-top: 10px; display: block; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>팔달 리틀 응원 플레이어 & 다운로더</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-        video { width: 100%; border-radius: 12px; background: #000; margin-bottom: 20px; outline: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        
-        .controls { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
-        select { padding: 12px 15px; border-radius: 8px; font-size: 15px; font-weight: bold; background: #333; color: white; border: 1px solid #555; cursor: pointer; outline: none; transition: 0.2s; }
-        select:hover { border-color: #777; }
-        
-        button { padding: 12px 28px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .btn-download { background: #2979ff; color: white; }
-        .btn-download:hover { background: #1565c0; }
-        button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
-        
-        #progress { margin-top: 20px; font-size: 14px; color: #00e676; display: none; font-weight: bold; background: rgba(0, 230, 118, 0.1); padding: 10px; border-radius: 8px; word-break: break-all; }
-        
-        @media (max-width: 600px) {
-            .cheer-title { font-size: 1.2rem; }
-            .cheer-subtitle { font-size: 0.9rem; }
-            .controls { flex-direction: column; width: 100%; }
-            select, button { width: 100%; }
-        }
-    </style>
+<style>
+body { margin:0; background:#121212; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:'Pretendard',sans-serif; }
+.player-card { width:90%; max-width:850px; background:#1e1e1e; padding:30px 20px; border-radius:20px; text-align:center; border:1px solid #333; }
+video { width:100%; border-radius:12px; background:#000; margin-bottom:20px; }
+.controls { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+button,select { padding:12px; border-radius:8px; }
+.btn-download { background:#2979ff; color:white; border:none; }
+#progress { margin-top:10px; display:none; }
+</style>
 </head>
+
 <body>
-
 <div class="player-card">
-    <div class="cheer-message">
-        <div class="cheer-title">
-            서툴지만 괜찮아, <span class="cheer-highlight">빛나는 너희들의 땀방울</span>을 기억해!
-        </div>
-        <div class="cheer-subtitle">
-            세상에서 가장 멋진 우리 아이들의 도전을 언제나 응원합니다.<br>
-            <span class="cheer-fighting">팔달 리틀 화이팅! 🔥</span>
-        </div>
-    </div>
-
     <video id="video" controls playsinline></video>
-    
+
     <div class="controls">
         <select id="formatSelect">
-            <option value="ts">.TS (원본 권장)</option>
-            <option value="mp4">.MP4 (단순 확장자 변경)</option>
+            <option value="ts">TS</option>
+            <option value="mp4">MP4</option>
         </select>
-        <button class="btn-download" id="downloadBtn" disabled>영상 다운로드</button>
+        <button class="btn-download" id="downloadBtn" disabled>다운로드</button>
     </div>
-    
-    <div id="progress">준비 중...</div>
+
+    <div id="progress"></div>
 </div>
 
 <script>
-    const video = document.getElementById('video');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const progressText = document.getElementById('progress');
-    const formatSelect = document.getElementById('formatSelect');
-    
-    // 💡 URL에서 주소를 완벽하게 가져오는 로직 ('&' 기호 잘림 방지)
-    let m3u8Url = "";
-    const urlParamIndex = window.location.href.indexOf('?url=');
-    if (urlParamIndex !== -1) {
-        m3u8Url = window.location.href.substring(urlParamIndex + 5);
-    }
+const video = document.getElementById('video');
+const downloadBtn = document.getElementById('downloadBtn');
+const progressText = document.getElementById('progress');
+const formatSelect = document.getElementById('formatSelect');
 
-    // 날짜 자동 추출 함수
-    function extractDate(text, url) {
-        const dateFromUrl = url.match(/(20\d{2})[-_]?([0-1]\d)[-_]?([0-3]\d)/);
-        if (dateFromUrl) return `${dateFromUrl[1]}-${dateFromUrl[2]}-${dateFromUrl[3]}`;
-        const dateFromTag = text.match(/#EXT-X-PROGRAM-DATE-TIME:([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-        if (dateFromTag) return dateFromTag[1];
-        return "팔달리틀_경기영상";
-    }
+let m3u8Url = "";
 
-    // 플레이어 초기화
-    if (m3u8Url) {
-        downloadBtn.disabled = false;
-        if (Hls.isSupported()) {
-            const hls = new Hls({ maxMaxBufferLength: 60, enableWorker: true });
-            hls.loadSource(m3u8Url);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-                    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-                    else hls.destroy();
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = m3u8Url;
+// 🔥 URL 파싱 (깨짐 방지)
+function getUrlParam(){
+    const idx = location.href.indexOf("?url=");
+    if(idx === -1) return "";
+    return decodeURIComponent(location.href.substring(idx + 5));
+}
+
+// 🔥 포착 전용 m3u8 추출
+async function extractM3U8FromPage(pageUrl){
+    try{
+        // 1. HTML 가져오기
+        const res = await fetch(pageUrl);
+        const text = await res.text();
+
+        // ❌ HTML에는 거의 없음 → 실패 가능
+        let match = text.match(/https?:\/\/[^"]+\.m3u8[^"]*/);
+        if(match) return match[0];
+
+        // 2. API 직접 호출 (핵심)
+        const url = new URL(pageUrl);
+        const id = url.searchParams.get("id");
+
+        if(!id) return null;
+
+        const apiList = [
+            `https://pochak.live/api/vod/${id}`,
+            `https://pochak.live/api/vod/detail?id=${id}`,
+            `https://pochak.live/api/video/${id}`
+        ];
+
+        for(const api of apiList){
+            try{
+                const r = await fetch(api);
+                const j = await r.json();
+
+                const str = JSON.stringify(j);
+                const m = str.match(/https?:\/\/[^"]+\.m3u8[^"]*/);
+
+                if(m) return m[0];
+            }catch(e){}
         }
+
+        return null;
+
+    }catch(e){
+        console.error(e);
+        return null;
+    }
+}
+
+// 🔥 플레이어 시작
+async function init(){
+    let inputUrl = getUrlParam();
+
+    if(!inputUrl){
+        showError("URL 없음");
+        return;
+    }
+
+    progressText.style.display = "block";
+    progressText.innerText = "영상 주소 분석 중...";
+
+    // m3u8인지 확인
+    if(inputUrl.includes(".m3u8")){
+        m3u8Url = inputUrl;
+    }else{
+        m3u8Url = await extractM3U8FromPage(inputUrl);
+    }
+
+    if(!m3u8Url){
+        showError("m3u8 추출 실패");
+        return;
+    }
+
+    progressText.innerText = "재생 준비 완료";
+
+    startPlayer(m3u8Url);
+    downloadBtn.disabled = false;
+}
+
+// 🔥 플레이어
+function startPlayer(url){
+    if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
     } else {
-        progressText.style.display = 'block';
-        progressText.style.color = '#ff5252';
-        progressText.style.background = 'rgba(255, 82, 82, 0.1)';
-        progressText.innerText = "URL 파라미터가 없습니다. 정상적인 경로로 접속해 주세요.";
-        downloadBtn.disabled = true;
+        video.src = url;
+    }
+}
+
+// 🔥 에러 표시
+function showError(msg){
+    progressText.style.display = "block";
+    progressText.style.color = "red";
+    progressText.innerText = msg;
+}
+
+// 🔥 다운로드 (기존 유지)
+downloadBtn.addEventListener('click', async ()=>{
+    if(!m3u8Url) return;
+
+    const format = formatSelect.value;
+    progressText.innerText = "m3u8 분석 중...";
+
+    const res = await fetch(m3u8Url);
+    const text = await res.text();
+
+    const lines = text.split("\n").filter(l => l && !l.startsWith("#"));
+    const base = m3u8Url.substring(0, m3u8Url.lastIndexOf("/") + 1);
+
+    let blobs = [];
+
+    for(let i=0;i<lines.length;i++){
+        const url = lines[i].startsWith("http") ? lines[i] : base + lines[i];
+        const r = await fetch(url);
+        blobs.push(await r.blob());
+
+        progressText.innerText = `다운로드 ${i+1}/${lines.length}`;
     }
 
-    // 고속 병렬 다운로드 로직
-    downloadBtn.addEventListener('click', async () => {
-        if (!m3u8Url) return;
-        
-        const selectedFormat = formatSelect.value;
-        
-        if (navigator.userAgent.match(/Android|iPhone|iPad|iPod/i) && selectedFormat === 'mp4') {
-            if (!confirm("스마트폰에서는 .MP4로 저장 시 갤러리에서 재생이 안 될 수 있습니다.\n\n안정적인 시청을 원하시면 .TS 포맷을 권장합니다.\n\n그래도 MP4로 다운로드하시겠습니까?")) {
-                return;
-            }
-        }
-        
-        downloadBtn.disabled = true;
-        formatSelect.disabled = true;
-        progressText.style.display = 'block';
-        progressText.style.color = '#00e676';
-        progressText.innerText = "M3U8 목록 분석 및 날짜 확인 중...";
+    const finalBlob = new Blob(blobs, {type: format==="mp4" ? "video/mp4":"video/mp2t"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(finalBlob);
+    a.download = "video."+format;
+    a.click();
 
-        try {
-            const response = await fetch(m3u8Url);
-            if (!response.ok) throw new Error("M3U8 파일을 가져오는 데 실패했습니다.");
-            const text = await response.text();
-            
-            // 날짜 기반 파일명 생성
-            const gameDate = extractDate(text, m3u8Url);
-            const finalFileName = gameDate === "팔달리틀_경기영상" ? gameDate : `${gameDate}_팔달리틀`;
+    progressText.innerText = "완료";
+});
 
-            const lines = text.split('\n').map(line => line.trim());
-            const tsUrls = lines.filter(line => line && !line.startsWith('#'));
-            
-            if (tsUrls.length === 0) {
-                alert("영상 조각을 찾을 수 없습니다.");
-                throw new Error("조각 없음");
-            }
-
-            const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
-            let combinedBlob = new Array(tsUrls.length);
-
-            const CONCURRENCY_LIMIT = 5;
-            let downloadedCount = 0;
-
-            progressText.innerText = `조각 다운로드 준비 중... (총 ${tsUrls.length}개)`;
-
-            async function downloadWorker(iterator) {
-                for (let [index, url] of iterator) {
-                    const fullUrl = url.startsWith('http') ? url : baseUrl + url;
-                    try {
-                        const tsRes = await fetch(fullUrl);
-                        if (!tsRes.ok) throw new Error(`HTTP error! status: ${tsRes.status}`);
-                        const tsBlob = await tsRes.blob();
-                        combinedBlob[index] = tsBlob;
-                        
-                        downloadedCount++;
-                        progressText.innerText = `조각 다운로드 중... (${downloadedCount} / ${tsUrls.length})`;
-                    } catch (e) {
-                        console.error(`${index}번째 다운로드 실패`, e);
-                    }
-                }
-            }
-
-            const entries = tsUrls.entries();
-            const workers = Array(CONCURRENCY_LIMIT).fill(entries).map(downloadWorker);
-            await Promise.all(workers);
-
-            progressText.innerText = "파일 병합 중... (파일이 크면 잠시 멈출 수 있습니다)";
-            
-            const validBlobs = combinedBlob.filter(blob => blob !== undefined);
-            const mimeType = selectedFormat === 'mp4' ? 'video/mp4' : 'video/mp2t';
-            const finalBlob = new Blob(validBlobs, { type: mimeType });
-            const downloadUrl = URL.createObjectURL(finalBlob);
-            
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `${finalFileName}.${selectedFormat}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            URL.revokeObjectURL(downloadUrl);
-            
-            progressText.innerText = "다운로드 완료! 🎉";
-        } catch (error) {
-            console.error(error);
-            progressText.style.color = '#ff5252';
-            progressText.innerText = "오류 발생: 네트워크 문제 또는 다운로드 취소됨";
-        } finally {
-            downloadBtn.disabled = false;
-            formatSelect.disabled = false;
-        }
-    });
+// 실행
+init();
 </script>
 
 </body>
