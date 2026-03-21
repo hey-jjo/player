@@ -1,80 +1,123 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>포착 라이브 - M3U8 추출기</title>
-    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
-    <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #121212; color: #fff; text-align: center; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #333; background: #252525; color: #fff; }
-        button { width: 95%; padding: 15px; background: #00e676; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s; }
-        button:hover { background: #00c853; }
-        #status { margin-top: 15px; font-size: 14px; color: #ffeb3b; min-height: 20px; }
-        #video-container { margin-top: 20px; display: none; }
-        .video-js { width: 100% !important; border-radius: 10px; overflow: hidden; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자동 M3U8 플레이어</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+body {
+  background: #121212;
+  color: white;
+  text-align: center;
+  font-family: sans-serif;
+  padding: 20px;
+}
+input {
+  width: 90%;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  margin-bottom: 10px;
+}
+button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2979ff;
+  color: white;
+  font-weight: bold;
+}
+video {
+  width: 100%;
+  margin-top: 20px;
+  border-radius: 12px;
+  background: black;
+}
+#log {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #00e676;
+}
+</style>
 </head>
+
 <body>
 
-<div class="container">
-    <h2>⚾️ 포착 라이브 추출기</h2>
-    <p style="font-size: 0.9em; color: #aaa;">포착 라이브 상세 페이지 주소를 입력하세요.</p>
-    
-    <input type="text" id="targetUrl" placeholder="https://pockat.live/game/..." />
-    <button onclick="startExtraction()">영상 재생하기</button>
-    
-    <div id="status"></div>
+<h2>포착 자동 재생</h2>
 
-    <div id="video-container">
-        <video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
-            <p class="vjs-no-js">이 브라우저는 비디오 재생을 지원하지 않습니다.</p>
-        </video>
-    </div>
-</div>
+<input id="urlInput" placeholder="포착 URL 넣기">
+<br>
+<button onclick="start()">재생</button>
 
-<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+<video id="video" controls playsinline></video>
+<div id="log"></div>
+
 <script>
-    let player = videojs('my-video');
+const video = document.getElementById('video');
+const log = document.getElementById('log');
 
-    async function startExtraction() {
-        const urlInput = document.getElementById('targetUrl').value;
-        const status = document.getElementById('status');
-        const videoContainer = document.getElementById('video-container');
+function setLog(msg) {
+  log.innerText = msg;
+}
 
-        if (!urlInput) {
-            status.innerText = "⚠️ 주소를 입력해주세요!";
-            return;
-        }
+// 🔥 최고 화질 선택
+function pickBest(urls) {
+  return urls.sort((a, b) => {
+    const getQ = u => parseInt(u.match(/(\d{3,4})\.m3u8/)?.[1] || 0);
+    return getQ(b) - getQ(a);
+  })[0];
+}
 
-        status.style.color = '#ffeb3b';
-        status.innerText = "🕵️ 서버에서 주소를 추출 중입니다. (약 5~10초 소요)...";
-        videoContainer.style.display = 'none';
+// 🔥 m3u8 추출 (단순 패턴 기반)
+async function extract(pageUrl) {
+  setLog("페이지 분석 중...");
 
-        try {
-            // 🚨 운영자님의 오라클 서버 IP 주소로 고정했습니다.
-            const apiUrl = `http://146.56.111.100:3000/api/extract?url=${encodeURIComponent(urlInput)}`;
-            const response = await fetch(apiUrl);
-            const data = await response.json();
+  const res = await fetch(pageUrl);
+  const html = await res.text();
 
-            if (data.success && data.m3u8) {
-                status.style.color = '#00e676';
-                status.innerText = "✅ 추출 성공! 영상을 재생합니다.";
-                
-                videoContainer.style.display = 'block';
-                player.src({ type: 'application/x-mpegURL', src: data.m3u8 });
-                player.play();
-            } else {
-                status.style.color = '#ff5252';
-                status.innerText = "❌ 실패: " + (data.error || "주소를 찾지 못했습니다.");
-            }
-        } catch (error) {
-            console.error(error);
-            status.style.color = '#ff5252';
-            status.innerText = "🚨 서버 연결 오류! (오라클 서버 상태를 확인하세요)";
-        }
-    }
+  // m3u8 후보 전부 찾기
+  const matches = [...html.matchAll(/https?:\/\/[^"' ]+\.m3u8/g)]
+    .map(m => m[0]);
+
+  if (matches.length === 0) {
+    throw "m3u8 못찾음";
+  }
+
+  setLog(`m3u8 ${matches.length}개 발견`);
+
+  return pickBest(matches);
+}
+
+// 🔥 재생
+function play(m3u8) {
+  setLog("재생 시작");
+
+  if (Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(m3u8);
+    hls.attachMedia(video);
+  } else {
+    video.src = m3u8;
+  }
+}
+
+// 🔥 시작
+async function start() {
+  const url = document.getElementById('urlInput').value;
+
+  try {
+    const m3u8 = await extract(url);
+
+    setLog("선택된 URL: " + m3u8);
+
+    play(m3u8);
+
+  } catch (e) {
+    setLog("실패: " + e);
+  }
+}
 </script>
 
 </body>
