@@ -56,7 +56,7 @@
             <option value="ts">.TS (원본 권장)</option>
             <option value="mp4">.MP4 (단순 확장자 변경)</option>
         </select>
-        <button class="btn-download" id="downloadBtn" disabled>로딩 중...</button>
+        <button class="btn-download" id="downloadBtn" disabled>영상 다운로드</button>
     </div>
     
     <div id="progress">준비 중...</div>
@@ -68,17 +68,14 @@
     const progressText = document.getElementById('progress');
     const formatSelect = document.getElementById('formatSelect');
     
-    // URL에서 ?url= 주소 가져오기
-    let targetUrl = "";
+    // 💡 URL에서 주소를 완벽하게 가져오는 로직 ('&' 기호 잘림 방지)
+    let m3u8Url = "";
     const urlParamIndex = window.location.href.indexOf('?url=');
     if (urlParamIndex !== -1) {
-        targetUrl = window.location.href.substring(urlParamIndex + 5);
+        m3u8Url = window.location.href.substring(urlParamIndex + 5);
     }
 
-    // 실제 재생 및 다운로드에 쓰일 알맹이 M3U8 주소
-    let finalM3u8Url = "";
-
-    // 날짜 추출 함수
+    // 날짜 자동 추출 함수
     function extractDate(text, url) {
         const dateFromUrl = url.match(/(20\d{2})[-_]?([0-1]\d)[-_]?([0-3]\d)/);
         if (dateFromUrl) return `${dateFromUrl[1]}-${dateFromUrl[2]}-${dateFromUrl[3]}`;
@@ -87,82 +84,34 @@
         return "팔달리틀_경기영상";
     }
 
-    // 무료 프록시를 이용해 페이지 소스에서 M3U8 주소 자동 추출
-    async function findM3u8FromWebpage(url) {
+    // 플레이어 초기화
+    if (m3u8Url) {
+        downloadBtn.disabled = false;
+        if (Hls.isSupported()) {
+            const hls = new Hls({ maxMaxBufferLength: 60, enableWorker: true });
+            hls.loadSource(m3u8Url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) {
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+                    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+                    else hls.destroy();
+                }
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = m3u8Url;
+        }
+    } else {
         progressText.style.display = 'block';
-        progressText.style.color = '#ffeb3b';
-        progressText.innerText = "웹페이지 탐색 중... 숨겨진 영상 주소를 찾고 있습니다 🕵️‍♂️";
-        
-        try {
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const response = await fetch(proxyUrl);
-            const data = await response.json();
-            
-            if (!data.contents) throw new Error("페이지 내용을 가져올 수 없습니다.");
-
-            const m3u8Matches = data.contents.match(/https?:\/\/[^\s"'<>]+?\.m3u8/g);
-            
-            if (m3u8Matches && m3u8Matches.length > 0) {
-                progressText.innerText = "영상 주소 추출 성공! 재생을 준비합니다.";
-                progressText.style.color = '#00e676';
-                return m3u8Matches[0];
-            } else {
-                throw new Error("페이지 소스에서 m3u8 주소를 찾지 못했습니다.");
-            }
-        } catch (error) {
-            console.error(error);
-            progressText.style.color = '#ff5252';
-            progressText.innerText = "자동 추출 실패: 보안이 강화된 사이트이거나 동적 페이지입니다. M3U8 주소를 직접 입력해 주세요.";
-            return null;
-        }
+        progressText.style.color = '#ff5252';
+        progressText.style.background = 'rgba(255, 82, 82, 0.1)';
+        progressText.innerText = "URL 파라미터가 없습니다. 정상적인 경로로 접속해 주세요.";
+        downloadBtn.disabled = true;
     }
 
-    // 플레이어 초기화 메인 로직
-    async function initializePlayer() {
-        if (!targetUrl) {
-            progressText.style.display = 'block';
-            progressText.style.color = '#ff5252';
-            progressText.style.background = 'rgba(255, 82, 82, 0.1)';
-            progressText.innerText = "URL 파라미터가 없습니다. (?url=주소 형식으로 접속하세요)";
-            return;
-        }
-
-        // 주소가 .m3u8로 끝나면 바로 사용, 아니면 자동 추출 시도
-        if (targetUrl.includes('.m3u8')) {
-            finalM3u8Url = targetUrl;
-        } else {
-            finalM3u8Url = await findM3u8FromWebpage(targetUrl);
-        }
-
-        if (finalM3u8Url) {
-            downloadBtn.disabled = false;
-            downloadBtn.innerText = "영상 다운로드";
-            downloadBtn.onclick = startDownload;
-            setTimeout(() => { progressText.style.display = 'none'; }, 2000); // 성공 메시지 후 숨김
-
-            if (Hls.isSupported()) {
-                const hls = new Hls({ maxMaxBufferLength: 60, enableWorker: true });
-                hls.loadSource(finalM3u8Url);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-                        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-                        else hls.destroy();
-                    }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = finalM3u8Url;
-            }
-        }
-    }
-
-    // 페이지 로딩 즉시 실행
-    initializePlayer();
-
-    // 다운로드 로직
-    async function startDownload() {
-        if (!finalM3u8Url) return;
+    // 고속 병렬 다운로드 로직
+    downloadBtn.addEventListener('click', async () => {
+        if (!m3u8Url) return;
         
         const selectedFormat = formatSelect.value;
         
@@ -179,12 +128,12 @@
         progressText.innerText = "M3U8 목록 분석 및 날짜 확인 중...";
 
         try {
-            const response = await fetch(finalM3u8Url);
+            const response = await fetch(m3u8Url);
             if (!response.ok) throw new Error("M3U8 파일을 가져오는 데 실패했습니다.");
             const text = await response.text();
             
-            // targetUrl(원본 주소)에서 1순위로 날짜를 찾고, 없으면 m3u8 내부를 뒤짐
-            const gameDate = extractDate(text, targetUrl);
+            // 날짜 기반 파일명 생성
+            const gameDate = extractDate(text, m3u8Url);
             const finalFileName = gameDate === "팔달리틀_경기영상" ? gameDate : `${gameDate}_팔달리틀`;
 
             const lines = text.split('\n').map(line => line.trim());
@@ -195,7 +144,7 @@
                 throw new Error("조각 없음");
             }
 
-            const baseUrl = finalM3u8Url.substring(0, finalM3u8Url.lastIndexOf('/') + 1);
+            const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
             let combinedBlob = new Array(tsUrls.length);
 
             const CONCURRENCY_LIMIT = 5;
@@ -249,7 +198,7 @@
             downloadBtn.disabled = false;
             formatSelect.disabled = false;
         }
-    }
+    });
 </script>
 
 </body>
