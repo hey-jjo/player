@@ -3,104 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팔달 리틀 멀티캠 플레이어</title>
+    <title>팔달 리틀 멀티캠 추출 중...</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; padding: 20px; }
-        .container { width: 100%; max-width: 800px; text-align: center; }
-        video { width: 100%; border-radius: 12px; background: #000; margin-bottom: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
-        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px; }
-        .cam-btn { background: #333; color: #fff; border: 1px solid #555; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        .cam-btn.active { background: #2979ff; border-color: #2979ff; font-weight: bold; }
-        .status-box { padding: 10px; font-size: 14px; margin-bottom: 10px; border-radius: 8px; display: none; }
-        .error { background: rgba(255, 82, 82, 0.2); color: #ff5252; border: 1px solid #ff5252; }
-        .success { background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid #00e676; }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 850px; padding: 20px; box-sizing: border-box; text-align: center; }
+        
+        /* 비디오 영역 */
+        #video-wrapper { width: 100%; aspect-ratio: 16 / 9; background: #111; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid #333; }
+        video { width: 100%; height: 100%; }
+
+        /* 로딩 바 디자인 */
+        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: #2979ff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 15px; font-size: 1rem; color: #aaa; }
+        .timer { font-size: 1.2rem; color: #2979ff; font-weight: bold; margin-top: 5px; }
+
+        /* 카메라 버튼 영역 (추출된 개수만큼 자동 확장) */
+        .cam-section { margin-top: 25px; }
+        .cam-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        .cam-btn { background: #222; color: #fff; border: 1px solid #444; padding: 15px 10px; border-radius: 10px; cursor: pointer; transition: 0.2s; font-size: 0.9rem; font-weight: bold; }
+        .cam-btn:hover { background: #333; }
+        .cam-btn.active { background: #2979ff; border-color: #2979ff; box-shadow: 0 0 15px rgba(41, 121, 255, 0.5); }
+
+        .header-title { color: #ffeb3b; margin: 0 0 15px 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="color: #ffeb3b;">⚾ 팔달 리틀 멀티캠 중계 ⚾</h2>
-    
-    <div id="status" class="status-box"></div>
+    <h2 class="header-title">⚾ 팔달 리틀 멀티캠 중계석 ⚾</h2>
 
-    <video id="video" controls playsinline></video>
-    
-    <div class="btn-group" id="camButtons">
-        <!-- 서버에서 주소를 받으면 여기에 버튼이 생성됩니다 -->
+    <div id="video-wrapper">
+        <!-- 로딩 화면 -->
+        <div id="loader">
+            <div class="spinner"></div>
+            <div class="loading-text" id="status-msg">오라클 서버가 주소를 추출하고 있습니다...</div>
+            <div class="timer" id="wait-timer">대기 시간: 0초</div>
+        </div>
+        <video id="video" controls playsinline></video>
+    </div>
+
+    <div class="cam-section">
+        <p style="color: #888; font-size: 0.85rem;">추출된 모든 시점 리스트</p>
+        <div id="cam-grid" class="cam-grid">
+            <!-- 버튼들이 동적으로 생성됨 -->
+        </div>
     </div>
 </div>
 
 <script>
     const video = document.getElementById('video');
-    const statusBox = document.getElementById('status');
-    const camButtons = document.getElementById('camButtons');
+    const loader = document.getElementById('loader');
+    const statusMsg = document.getElementById('status-msg');
+    const waitTimer = document.getElementById('wait-timer');
+    const camGrid = document.getElementById('cam-grid');
+    
     let hls = null;
+    let seconds = 0;
+    let timerInterval;
 
-    // 💡 오라클 서버 API 주소
-    const API_URL = "http://146.56.111.100:3000/api/extract?url=";
-
-    // 1. 주소창에서 포착 URL 가져오기
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetUrl = urlParams.get('url');
-
-    function showStatus(msg, type) {
-        statusBox.innerText = msg;
-        statusBox.className = `status-box ${type}`;
-        statusBox.style.display = 'block';
+    // 타이머 가동
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            seconds++;
+            waitTimer.innerText = `대기 시간: ${seconds}초 / 최대 30초`;
+            if(seconds === 10) statusMsg.innerText = "거의 다 되었습니다. 패킷 해부 중...";
+            if(seconds === 20) statusMsg.innerText = "조금만 더 기다려주세요. 최종 주소 조립 중...";
+        }, 1000);
     }
 
     async function init() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUrl = urlParams.get('url');
+
         if (!targetUrl) {
-            showStatus("❌ URL 파라미터가 없습니다.", "error");
+            statusMsg.innerText = "❌ URL 파라미터가 없습니다.";
+            loader.querySelector('.spinner').style.display = 'none';
             return;
         }
 
-        showStatus("🔍 오라클 서버에서 주소 추출 중...", "success");
+        startTimer();
 
         try {
-            // 2. 오라클 서버에 요청
-            const response = await fetch(API_URL + encodeURIComponent(targetUrl));
+            // 오라클 서버 호출 (타임아웃 대비 40초 대기 설정)
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 40000);
+
+            const api = "http://146.56.111.100:3000/api/extract?url=" + encodeURIComponent(targetUrl);
+            const response = await fetch(api, { signal: controller.signal });
             const data = await response.json();
+            clearTimeout(id);
 
             if (data.success && data.urls.length > 0) {
-                showStatus("✅ 추출 완료! 시점을 선택하세요.", "success");
-                createButtons(data.urls);
-                // 첫 번째 주소(보통 고화질) 자동 재생
-                playStream(data.urls[0]);
+                clearInterval(timerInterval);
+                loader.style.display = 'none';
+                
+                // 추출된 개수만큼 버튼 만들기
+                createCamButtons(data.urls);
+                
+                // 첫 번째 영상(HD1) 자동 재생
+                playStream(data.urls[0], 0);
             } else {
-                showStatus("❌ 주소를 찾지 못했습니다: " + (data.message || "알 수 없는 에러"), "error");
+                throw new Error(data.message || "추출 실패");
             }
         } catch (e) {
-            console.error(e);
-            showStatus("❌ 서버 연결 실패! (브라우저 설정에서 '안전하지 않은 콘텐츠 허용'을 확인하세요)", "error");
+            clearInterval(timerInterval);
+            loader.querySelector('.spinner').style.display = 'none';
+            waitTimer.style.display = 'none';
+            statusMsg.style.color = "#ff5252";
+            statusMsg.innerText = "❌ 추출 실패: " + e.message + "\n브라우저 '안전하지 않은 콘텐츠 허용'을 확인하세요.";
         }
     }
 
-    function createButtons(urls) {
-        camButtons.innerHTML = "";
+    function createCamButtons(urls) {
+        camGrid.innerHTML = "";
         urls.forEach((url, index) => {
             const btn = document.createElement('button');
             btn.className = 'cam-btn';
             
-            // 이름 예쁘게 붙이기
-            if(url.includes('hd1')) btn.innerText = "🎥 AI 고화질";
-            else if(url.includes('hd0')) btn.innerText = "🎥 AI 저화질";
-            else if(url.includes('pano1')) btn.innerText = "🌐 파노라마 1";
-            else if(url.includes('pano0')) btn.innerText = "🌐 파노라마 2";
-            else btn.innerText = "📹 카메라 " + (index + 1);
+            // 주소 특징에 따라 이름 부여
+            let camName = `카메라 ${index + 1}`;
+            if(url.includes('hd1')) camName = "📽️ AI 고화질";
+            else if(url.includes('hd0')) camName = "📽️ AI 저화질";
+            else if(url.includes('pano1')) camName = "🌐 파노라마 1";
+            else if(url.includes('pano0')) camName = "🌐 파노라마 2";
+            else if(url.includes('highlights')) camName = "✂️ 하이라이트";
 
-            btn.onclick = () => {
-                document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                playStream(url);
-            };
-            camButtons.appendChild(btn);
+            btn.innerText = camName;
+            btn.onclick = () => playStream(url, index);
+            camGrid.appendChild(btn);
         });
-        if(camButtons.firstChild) camButtons.firstChild.classList.add('active');
     }
 
-    function playStream(url) {
+    function playStream(url, index) {
+        // 버튼 활성화 스타일
+        const btns = document.querySelectorAll('.cam-btn');
+        btns.forEach((b, i) => b.classList.toggle('active', i === index));
+
         if (hls) hls.destroy();
 
         if (Hls.isSupported()) {
