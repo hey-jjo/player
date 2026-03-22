@@ -1,123 +1,177 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>자동 M3U8 플레이어</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팔달 리틀 멀티캠 플레이어</title>
+    <!-- HLS.js 라이브러리 (m3u8 재생용) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root { --primary: #2979ff; --success: #00e676; --bg: #121212; --card: #1e1e1e; }
+        body { margin: 0; background: var(--bg); color: #fff; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 15px; }
+        
+        .player-card { width: 100%; max-width: 900px; background: var(--card); border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
+        
+        /* 헤더 디자인 */
+        .header { padding: 20px; text-align: center; border-bottom: 1px solid #333; }
+        .header h2 { margin: 0; color: #ffeb3b; font-size: 1.3rem; }
+        .status { font-size: 0.9rem; color: var(--success); margin-top: 8px; font-weight: 500; }
 
-<style>
-body {
-  background: #121212;
-  color: white;
-  text-align: center;
-  font-family: sans-serif;
-  padding: 20px;
-}
-input {
-  width: 90%;
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  margin-bottom: 10px;
-}
-button {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  background: #2979ff;
-  color: white;
-  font-weight: bold;
-}
-video {
-  width: 100%;
-  margin-top: 20px;
-  border-radius: 12px;
-  background: black;
-}
-#log {
-  margin-top: 15px;
-  font-size: 14px;
-  color: #00e676;
-}
-</style>
+        /* 비디오 영역 */
+        .video-container { position: relative; background: #000; width: 100%; aspect-ratio: 16 / 9; }
+        video { width: 100%; height: 100%; outline: none; }
+
+        /* 캠 전환 버튼 구역 */
+        .cam-selector { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .cam-label { font-size: 0.9rem; color: #aaa; font-weight: bold; }
+        .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+        
+        .btn-cam { background: #333; color: #ddd; border: 1px solid #444; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: 600; transition: 0.3s; font-size: 0.85rem; }
+        .btn-cam:hover { background: #444; }
+        .btn-cam.active { background: var(--primary); color: #white; border-color: var(--primary); box-shadow: 0 0 15px rgba(41, 121, 255, 0.4); }
+
+        /* 하단 액션 버튼 */
+        .actions { padding: 0 20px 20px; display: flex; gap: 10px; }
+        .btn-action { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+        .btn-download { background: var(--success); color: #004d40; }
+        .btn-copy { background: #f5f5f5; color: #333; }
+
+        /* 로딩 애니메이션 */
+        #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 600px) {
+            .btn-group { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
 </head>
-
 <body>
 
-<h2>포착 자동 재생</h2>
+<div class="player-card">
+    <div class="header">
+        <h2>⚾ 팔달 리틀 경기 중계석 ⚾</h2>
+        <div id="status" class="status">오라클 서버 접속 중...</div>
+    </div>
 
-<input id="urlInput" placeholder="포착 URL 넣기">
-<br>
-<button onclick="start()">재생</button>
+    <div class="video-container">
+        <div id="loader"><div class="spinner"></div></div>
+        <video id="video" controls playsinline poster="https://d3ocndcybz2qo4.cloudfront.net/prd/app/logo/Pochak_Digital_Icon_Android.png"></video>
+    </div>
 
-<video id="video" controls playsinline></video>
-<div id="log"></div>
+    <div class="cam-selector">
+        <div class="cam-label">원하는 카메라 시점을 선택하세요</div>
+        <div id="btnList" class="btn-group">
+            <!-- 추출된 주소들이 여기에 버튼으로 생성됩니다 -->
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="btn-action btn-copy" onclick="copyCurrentUrl()">주소 복사 (1DM용)</button>
+        <button class="btn-action btn-download" onclick="downloadNotice()">영상 다운로드</button>
+    </div>
+</div>
 
 <script>
-const video = document.getElementById('video');
-const log = document.getElementById('log');
+    const video = document.getElementById('video');
+    const statusText = document.getElementById('status');
+    const btnList = document.getElementById('btnList');
+    const loader = document.getElementById('loader');
+    
+    let hls = null;
+    let currentM3U8 = "";
 
-function setLog(msg) {
-  log.innerText = msg;
-}
+    // 💡 오라클 서버 API 경로
+    const API_SERVER = "http://146.56.111.100:3000/api/extract?url=";
 
-// 🔥 최고 화질 선택
-function pickBest(urls) {
-  return urls.sort((a, b) => {
-    const getQ = u => parseInt(u.match(/(\d{3,4})\.m3u8/)?.[1] || 0);
-    return getQ(b) - getQ(a);
-  })[0];
-}
+    // URL에서 포착 주소 추출
+    const urlParams = new URLSearchParams(window.location.search);
+    const pochakUrl = urlParams.get('url');
 
-// 🔥 m3u8 추출 (단순 패턴 기반)
-async function extract(pageUrl) {
-  setLog("페이지 분석 중...");
+    async function startExtraction() {
+        if (!pochakUrl) {
+            statusText.innerText = "❌ 입력된 URL이 없습니다.";
+            statusText.style.color = "#ff5252";
+            loader.style.display = "none";
+            return;
+        }
 
-  const res = await fetch(pageUrl);
-  const html = await res.text();
+        try {
+            const response = await fetch(API_SERVER + encodeURIComponent(pochakUrl));
+            const data = await response.json();
 
-  // m3u8 후보 전부 찾기
-  const matches = [...html.matchAll(/https?:\/\/[^"' ]+\.m3u8/g)]
-    .map(m => m[0]);
+            if (data.success && data.urls.length > 0) {
+                statusText.innerText = "✅ 모든 캠 추출 성공! 시점을 선택하세요.";
+                renderButtons(data.urls);
+                // 첫 번째 주소(보통 고화질)로 자동 시작
+                playStream(data.urls[0], 0);
+            } else {
+                throw new Error(data.message || "추출 실패");
+            }
+        } catch (e) {
+            statusText.innerText = "❌ 오류: " + e.message;
+            statusText.style.color = "#ff5252";
+            loader.style.display = "none";
+        }
+    }
 
-  if (matches.length === 0) {
-    throw "m3u8 못찾음";
-  }
+    function renderButtons(urls) {
+        btnList.innerHTML = "";
+        urls.forEach((url, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-cam';
+            
+            // 주소 패턴에 따라 이름 붙이기
+            let name = `카메라 ${index + 1}`;
+            if(url.includes('hd1')) name = "📽️ AI 고화질";
+            else if(url.includes('hd0')) name = "📽️ AI 저화질";
+            else if(url.includes('pano1')) name = "🌐 파노라마 1";
+            else if(url.includes('pano0')) name = "🌐 파노라마 2";
+            else if(url.includes('highlights')) name = "✂️ 하이라이트";
 
-  setLog(`m3u8 ${matches.length}개 발견`);
+            btn.innerText = name;
+            btn.onclick = () => playStream(url, index);
+            btnList.appendChild(btn);
+        });
+    }
 
-  return pickBest(matches);
-}
+    function playStream(url, index) {
+        currentM3U8 = url;
+        loader.style.display = "block";
+        
+        // 버튼 활성화 표시
+        const btns = document.querySelectorAll('.btn-cam');
+        btns.forEach((b, i) => b.classList.toggle('active', i === index));
 
-// 🔥 재생
-function play(m3u8) {
-  setLog("재생 시작");
+        if (hls) hls.destroy();
 
-  if (Hls.isSupported()) {
-    const hls = new Hls();
-    hls.loadSource(m3u8);
-    hls.attachMedia(video);
-  } else {
-    video.src = m3u8;
-  }
-}
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play();
+                loader.style.display = "none";
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.play();
+            loader.style.display = "none";
+        }
+    }
 
-// 🔥 시작
-async function start() {
-  const url = document.getElementById('urlInput').value;
+    function copyCurrentUrl() {
+        if (!currentM3U8) return;
+        navigator.clipboard.writeText(currentM3U8);
+        alert("현재 카메라 주소가 복사되었습니다! 1DM 앱에 붙여넣으세요.");
+    }
 
-  try {
-    const m3u8 = await extract(url);
+    function downloadNotice() {
+        alert("이 플레이어는 스트리밍 전용입니다.\n다운로드는 1DM 앱을 사용하시거나 '주소 복사' 후 외부 툴을 이용해주세요!");
+    }
 
-    setLog("선택된 URL: " + m3u8);
-
-    play(m3u8);
-
-  } catch (e) {
-    setLog("실패: " + e);
-  }
-}
+    // 실행 시작
+    startExtraction();
 </script>
 
 </body>
