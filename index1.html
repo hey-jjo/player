@@ -2,71 +2,88 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>연결 테스트</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오라클 데이터 수신 확인</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .result-box { background: #1e1e1e; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-top: 20px; }
-        .btn-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .cam-btn { background: #2979ff; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        #status { color: #ffeb3b; }
+        .card { background: #1e1e1e; padding: 25px; border-radius: 15px; border: 1px solid #333; max-width: 500px; margin: auto; }
+        .btn-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+        .cam-btn { background: #2979ff; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        #status { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; }
+        .loading-bar { width: 100%; height: 4px; background: #333; margin: 15px 0; overflow: hidden; border-radius: 2px; }
+        .loading-inner { width: 0%; height: 100%; background: #2979ff; transition: width 0.5s; }
     </style>
 </head>
 <body>
 
-    <h2>📡 오라클 서버 연결 확인</h2>
-    <p id="status">대기 중...</p>
+    <div class="card">
+        <h2>📡 데이터 수신 테스트</h2>
+        <p id="target">대상: <span style="color:#888; font-size: 12px;">2026032101580002...</span></p>
+        
+        <div class="loading-bar"><div id="bar" class="loading-inner"></div></div>
+        <p id="status">오라클 서버 응답 대기 중...</p>
 
-    <div class="result-box">
         <div id="btnList" class="btn-list">
-            <!-- 서버 응답 성공 시 버튼이 여기에 생깁니다 -->
+            <!-- 성공하면 여기에 카메라 버튼들이 생깁니다 -->
         </div>
-        <pre id="rawJson" style="text-align: left; font-size: 12px; color: #888; overflow: auto;"></pre>
     </div>
 
 <script>
     const statusText = document.getElementById('status');
     const btnList = document.getElementById('btnList');
-    const rawJson = document.getElementById('rawJson');
+    const bar = document.getElementById('bar');
 
+    // 💡 고정된 포착 주소 (두 번 붙여넣기 안 해도 됨)
+    const POCHAK_VOD = "https://pochak.live/vod?id=2026032101580002&type=vod&matchid=2026031807270001";
     const API = "http://146.56.111.100:3000/api/extract?url=";
 
-    async function testConnect() {
-        const params = new URLSearchParams(window.location.search);
-        const pochakUrl = params.get('url');
-
-        if(!pochakUrl) {
-            statusText.innerText = "❌ URL 파라미터가 없습니다. (?url=포착주소 붙이세요)";
-            return;
-        }
-
-        statusText.innerText = "⏳ 서버에서 주소 털어오는 중... (약 15초)";
+    async function autoCheck() {
+        // 진행바 애니메이션
+        let width = 0;
+        const interval = setInterval(() => {
+            if (width >= 90) clearInterval(interval);
+            width += 2;
+            bar.style.width = width + "%";
+        }, 300);
 
         try {
-            const res = await fetch(API + encodeURIComponent(pochakUrl));
+            // 서버에 데이터 요청
+            const res = await fetch(API + encodeURIComponent(POCHAK_VOD));
             const data = await res.json();
 
-            // 원본 데이터 출력
-            rawJson.innerText = JSON.stringify(data, null, 2);
+            clearInterval(interval);
+            bar.style.width = "100%";
 
             if(data.success) {
-                statusText.innerText = "✅ 연결 성공! 버튼이 생성되었습니다.";
+                statusText.innerText = "✅ 데이터 수신 성공!";
+                statusText.style.color = "#00e676";
+
                 data.urls.forEach((url, i) => {
                     const btn = document.createElement('button');
                     btn.className = 'cam-btn';
-                    btn.innerText = `카메라 ${i+1}: ${url.split('/').slice(-3).join('/')}`;
-                    btn.onclick = () => alert("재생 주소: " + url);
+                    
+                    // 이름 자동 정리
+                    let name = `카메라 ${i+1}`;
+                    if(url.includes('hd1')) name = "📽️ AI 고화질";
+                    if(url.includes('pano')) name = "🌐 파노라마";
+                    
+                    btn.innerText = name + " 연결 완료";
+                    btn.onclick = () => alert("M3U8 주소 수신됨:\n" + url);
                     btnList.appendChild(btn);
                 });
             } else {
-                statusText.innerText = "❌ 서버는 응답했으나 주소 추출 실패: " + data.message;
+                statusText.innerText = "❌ 추출 실패: " + data.message;
+                statusText.style.color = "#ff5252";
             }
         } catch (e) {
-            statusText.style.color = "red";
-            statusText.innerHTML = "⚠️ 연결 차단됨 (HTTPS 보안 장벽)<br>아래 [확인 방법] 링크를 클릭해서 접속하세요!";
+            clearInterval(interval);
+            statusText.style.color = "#ff5252";
+            statusText.innerHTML = "⚠️ 보안 차단됨 (Failed to fetch)<br><br><span style='font-size:13px; color:#aaa;'>브라우저 주소창 왼쪽 '자물쇠' 아이콘 클릭 -> '사이트 설정' -> '안전하지 않은 콘텐츠'를 [허용]으로 바꿔야 데이터가 들어옵니다.</span>";
         }
     }
 
-    testConnect();
+    // 실행
+    autoCheck();
 </script>
 </body>
 </html>
