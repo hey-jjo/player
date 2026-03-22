@@ -3,87 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>오라클 데이터 수신 확인</title>
+    <title>팔달 리틀 멀티캠 통합관제</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { background: #121212; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .card { background: #1e1e1e; padding: 25px; border-radius: 15px; border: 1px solid #333; max-width: 500px; margin: auto; }
-        .btn-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
-        .cam-btn { background: #2979ff; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; }
-        #status { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; }
-        .loading-bar { width: 100%; height: 4px; background: #333; margin: 15px 0; overflow: hidden; border-radius: 2px; }
-        .loading-inner { width: 0%; height: 100%; background: #2979ff; transition: width 0.5s; }
+        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; margin: 0; padding: 15px; }
+        .player-wrap { width: 100%; max-width: 850px; margin: auto; }
+        video { width: 100%; border-radius: 15px; background: #111; border: 1px solid #333; margin-bottom: 20px; }
+        
+        /* 버튼 그리드 세팅 */
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .cam-btn { 
+            background: #222; color: #fff; border: 1px solid #444; padding: 15px; 
+            border-radius: 12px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .cam-btn:hover { background: #333; }
+        .cam-btn.active { background: #2979ff; border-color: #2979ff; box-shadow: 0 0 15px rgba(41, 121, 255, 0.5); }
+        
+        #status { color: #ffeb3b; margin-bottom: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>📡 데이터 수신 테스트</h2>
-        <p id="target">대상: <span style="color:#888; font-size: 12px;">2026032101580002...</span></p>
-        
-        <div class="loading-bar"><div id="bar" class="loading-inner"></div></div>
-        <p id="status">오라클 서버 응답 대기 중...</p>
+<div class="player-wrap">
+    <h2 style="color: #00e676;">📽️ 팔달 리틀 시점 선택</h2>
+    <div id="status">오라클 서버에서 비밀 코드 탈취 중...</div>
+    
+    <video id="video" controls playsinline></video>
 
-        <div id="btnList" class="btn-list">
-            <!-- 성공하면 여기에 카메라 버튼들이 생깁니다 -->
-        </div>
+    <div class="grid-container" id="controls" style="display: none;">
+        <button class="cam-btn" onclick="changeCam('hd_hls/hd1/hd.m3u8', this)">📽️ AI 고화질 (메인)</button>
+        <button class="cam-btn" onclick="changeCam('pano_hls/pano1/pano.m3u8', this)">🌐 파노라마 1</button>
+        <button class="cam-btn" onclick="changeCam('pano_hls/pano0/pano.m3u8', this)">🌐 파노라마 2</button>
+        <button class="cam-btn" onclick="changeCam('hd_hls/hd0/hd.m3u8', this)">🎥 AI 저화질</button>
+        <button class="cam-btn" onclick="changeCam('highlights_hls/highlights1/highlights.m3u8', this)" style="grid-column: span 2;">✂️ 하이라이트 보기</button>
     </div>
+</div>
 
 <script>
-    const statusText = document.getElementById('status');
-    const btnList = document.getElementById('btnList');
-    const bar = document.getElementById('bar');
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+    const controls = document.getElementById('controls');
+    let hls = null;
+    let currentId = "";
 
-    // 💡 고정된 포착 주소 (두 번 붙여넣기 안 해도 됨)
-    const POCHAK_VOD = "https://pochak.live/vod?id=2026032101580002&type=vod&matchid=2026031807270001";
+    // 고정 주소 및 API
+    const pochakUrl = new URLSearchParams(window.location.search).get('url');
     const API = "http://146.56.111.100:3000/api/extract?url=";
 
-    async function autoCheck() {
-        // 진행바 애니메이션
-        let width = 0;
-        const interval = setInterval(() => {
-            if (width >= 90) clearInterval(interval);
-            width += 2;
-            bar.style.width = width + "%";
-        }, 300);
+    async function init() {
+        if (!pochakUrl) {
+            status.innerText = "❌ URL이 없습니다.";
+            return;
+        }
 
         try {
-            // 서버에 데이터 요청
-            const res = await fetch(API + encodeURIComponent(POCHAK_VOD));
+            const res = await fetch(API + encodeURIComponent(pochakUrl));
             const data = await res.json();
 
-            clearInterval(interval);
-            bar.style.width = "100%";
-
-            if(data.success) {
-                statusText.innerText = "✅ 데이터 수신 성공!";
-                statusText.style.color = "#00e676";
-
-                data.urls.forEach((url, i) => {
-                    const btn = document.createElement('button');
-                    btn.className = 'cam-btn';
-                    
-                    // 이름 자동 정리
-                    let name = `카메라 ${i+1}`;
-                    if(url.includes('hd1')) name = "📽️ AI 고화질";
-                    if(url.includes('pano')) name = "🌐 파노라마";
-                    
-                    btn.innerText = name + " 연결 완료";
-                    btn.onclick = () => alert("M3U8 주소 수신됨:\n" + url);
-                    btnList.appendChild(btn);
-                });
+            if (data.success) {
+                currentId = data.assetId;
+                status.innerText = "✅ 시점을 선택하세요 (ID: " + currentId.substring(0,6) + "...)";
+                controls.style.display = "grid";
+                
+                // 기본으로 AI 고화질 재생
+                changeCam('hd_hls/hd1/hd.m3u8', document.querySelector('.cam-btn'));
             } else {
-                statusText.innerText = "❌ 추출 실패: " + data.message;
-                statusText.style.color = "#ff5252";
+                status.innerText = "❌ ID 탈취 실패: " + data.message;
             }
         } catch (e) {
-            clearInterval(interval);
-            statusText.style.color = "#ff5252";
-            statusText.innerHTML = "⚠️ 보안 차단됨 (Failed to fetch)<br><br><span style='font-size:13px; color:#aaa;'>브라우저 주소창 왼쪽 '자물쇠' 아이콘 클릭 -> '사이트 설정' -> '안전하지 않은 콘텐츠'를 [허용]으로 바꿔야 데이터가 들어옵니다.</span>";
+            status.innerText = "❌ 서버 연결 에러 (보안 설정 확인)";
         }
     }
 
-    // 실행
-    autoCheck();
+    function changeCam(path, btn) {
+        const fullUrl = `https://dnw98ykn7b9iq.cloudfront.net/yst/${currentId}/venue_hls/${path}`;
+        
+        // 버튼 활성화 스타일
+        document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+
+        if (hls) hls.destroy();
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(fullUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = fullUrl;
+            video.play();
+        }
+    }
+
+    init();
 </script>
+
 </body>
 </html>
