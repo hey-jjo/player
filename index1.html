@@ -3,99 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팔달 리틀 멀티캠 통합관제</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <title>Pochak Auto Player</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; margin: 0; padding: 15px; }
-        .player-wrap { width: 100%; max-width: 850px; margin: auto; }
-        video { width: 100%; border-radius: 15px; background: #111; border: 1px solid #333; margin-bottom: 20px; }
-        
-        /* 버튼 그리드 세팅 */
-        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .cam-btn { 
-            background: #222; color: #fff; border: 1px solid #444; padding: 15px; 
-            border-radius: 12px; cursor: pointer; font-weight: bold; transition: 0.2s;
-        }
-        .cam-btn:hover { background: #333; }
-        .cam-btn.active { background: #2979ff; border-color: #2979ff; box-shadow: 0 0 15px rgba(41, 121, 255, 0.5); }
-        
-        #status { color: #ffeb3b; margin-bottom: 10px; font-size: 14px; }
+        body { background: #121212; color: white; font-family: sans-serif; margin: 0; padding: 20px; text-align: center; }
+        .video-container { max-width: 900px; margin: 20px auto; background: #000; border-radius: 12px; overflow: hidden; }
+        .video-js { width: 100%; aspect-ratio: 16 / 9; }
+        .controls { background: #1e1e1e; padding: 20px; border-radius: 10px; max-width: 860px; margin: 0 auto; }
+        input { width: 70%; padding: 12px; border-radius: 5px; border: 1px solid #333; background: #2b2b2b; color: #fff; }
+        button.main-btn { padding: 12px 25px; background: #e91e63; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; }
+        .angle-btn { padding: 10px; background: #333; color: #ccc; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+        .angle-btn.active { background: #00bcd4; color: white; }
+        #loading { display: none; color: #ffeb3b; margin: 10px; }
     </style>
 </head>
 <body>
 
-<div class="player-wrap">
-    <h2 style="color: #00e676;">📽️ 팔달 리틀 시점 선택</h2>
-    <div id="status">오라클 서버에서 비밀 코드 탈취 중...</div>
-    
-    <video id="video" controls playsinline></video>
+    <h1>🎬 Pochak Auto Player</h1>
 
-    <div class="grid-container" id="controls" style="display: none;">
-        <button class="cam-btn" onclick="changeCam('hd_hls/hd1/hd.m3u8', this)">📽️ AI 고화질 (메인)</button>
-        <button class="cam-btn" onclick="changeCam('pano_hls/pano1/pano.m3u8', this)">🌐 파노라마 1</button>
-        <button class="cam-btn" onclick="changeCam('pano_hls/pano0/pano.m3u8', this)">🌐 파노라마 2</button>
-        <button class="cam-btn" onclick="changeCam('hd_hls/hd0/hd.m3u8', this)">🎥 AI 저화질</button>
-        <button class="cam-btn" onclick="changeCam('highlights_hls/highlights1/highlights.m3u8', this)" style="grid-column: span 2;">✂️ 하이라이트 보기</button>
+    <div class="controls">
+        <input type="text" id="vodUrl" placeholder="포착 VOD 주소를 입력하세요">
+        <button class="main-btn" onclick="fetchAndPlay()">영상 추출 및 재생</button>
+        <div id="loading">서버에서 ID 추출 중... (약 15~20초 소요)</div>
     </div>
-</div>
 
-<script>
-    const video = document.getElementById('video');
-    const status = document.getElementById('status');
-    const controls = document.getElementById('controls');
-    let hls = null;
-    let currentId = "";
+    <div class="video-container">
+        <video id="main-player" class="video-js vjs-big-play-centered" controls preload="auto"></video>
+    </div>
 
-    // 고정 주소 및 API
-    const pochakUrl = new URLSearchParams(window.location.search).get('url');
-    const API = "http://146.56.111.100:3000/api/extract?url=";
+    <div class="controls" id="angle-section" style="display:none;">
+        <div class="btn-group">
+            <button class="angle-btn active" onclick="changeAngle('hd1', this)">HD 1</button>
+            <button class="angle-btn" onclick="changeAngle('hd0', this)">HD 0</button>
+            <button class="angle-btn" onclick="changeAngle('pano1', this)">PANO 1</button>
+            <button class="angle-btn" onclick="changeAngle('pano0', this)">PANO 0</button>
+            <button class="angle-btn" onclick="changeAngle('high1', this)">하이라이트 1</button>
+            <button class="angle-btn" onclick="changeAngle('high0', this)">하이라이트 0</button>
+        </div>
+    </div>
 
-    async function init() {
-        if (!pochakUrl) {
-            status.innerText = "❌ URL이 없습니다.";
-            return;
-        }
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script>
+        const player = videojs('main-player');
+        let currentId = "";
+        const SERVER_API = "http://146.56.111.100:3000/get_video?url=";
 
-        try {
-            const res = await fetch(API + encodeURIComponent(pochakUrl));
-            const data = await res.json();
+        async function fetchAndPlay() {
+            const url = document.getElementById('vodUrl').value.trim();
+            if(!url) return alert("URL을 입력하세요.");
 
-            if (data.success) {
-                currentId = data.assetId;
-                status.innerText = "✅ 시점을 선택하세요 (ID: " + currentId.substring(0,6) + "...)";
-                controls.style.display = "grid";
-                
-                // 기본으로 AI 고화질 재생
-                changeCam('hd_hls/hd1/hd.m3u8', document.querySelector('.cam-btn'));
-            } else {
-                status.innerText = "❌ ID 탈취 실패: " + data.message;
+            document.getElementById('loading').style.display = "block";
+            
+            try {
+                // 내 서버 API 호출
+                const response = await fetch(SERVER_API + encodeURIComponent(url));
+                const data = await response.json();
+
+                if(data.success) {
+                    currentId = data.video_id;
+                    document.getElementById('angle-section').style.display = "block";
+                    changeAngle('hd1', document.querySelector('.angle-btn.active'));
+                } else {
+                    alert("추출 실패: 서버 응답을 확인하세요.");
+                }
+            } catch (e) {
+                alert("서버 연결 에러: 오라클 서버가 켜져 있는지 확인하세요.");
+            } finally {
+                document.getElementById('loading').style.display = "none";
             }
-        } catch (e) {
-            status.innerText = "❌ 서버 연결 에러 (보안 설정 확인)";
         }
-    }
 
-    function changeCam(path, btn) {
-        const fullUrl = `https://dnw98ykn7b9iq.cloudfront.net/yst/${currentId}/venue_hls/${path}`;
-        
-        // 버튼 활성화 스타일
-        document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
-        if(btn) btn.classList.add('active');
+        function changeAngle(mode, btn) {
+            if(!currentId) return;
 
-        if (hls) hls.destroy();
-        if (Hls.isSupported()) {
-            hls = new Hls();
-            hls.loadSource(fullUrl);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = fullUrl;
-            video.play();
+            const base = `https://dnw98ykn7b9iq.cloudfront.net/yst/${currentId}/venue_hls`;
+            const paths = {
+                'hd1': `/hd_hls/hd1/hd.m3u8`,
+                'hd0': `/hd_hls/hd0/hd.m3u8`,
+                'pano1': `/pano_hls/pano1/pano.m3u8`,
+                'pano0': `/pano_hls/pano0/pano.m3u8`,
+                'high1': `/highlights_hls/highlights1/highlights.m3u8`,
+                'high0': `/highlights_hls/highlights0/highlights.m3u8`
+            };
+
+            document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            player.src({ src: base + paths[mode], type: 'application/x-mpegURL' });
+            player.play();
         }
-    }
-
-    init();
-</script>
-
+    </script>
 </body>
 </html>
