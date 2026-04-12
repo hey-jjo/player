@@ -1,207 +1,491 @@
 <!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팔달리틀 플레이어 & 다운로더</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Pretendard', -apple-system, sans-serif; padding: 20px 0; }
-        .player-card { width: 90%; max-width: 850px; background: #1e1e1e; padding: 30px 20px 20px 20px; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid #333; }
-        
-        .cheer-message { margin-bottom: 25px; padding: 0 10px; }
-        .cheer-title { font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 8px; line-height: 1.3; word-break: keep-all; }
-        .cheer-subtitle { font-size: 1rem; font-weight: 400; color: #aaa; margin-bottom: 15px; line-height: 1.5; word-break: keep-all; }
-        .cheer-highlight { color: #ffeb3b; font-weight: 700; }
-        .cheer-fighting { font-size: 1.2rem; font-weight: 700; color: #00e676; margin-top: 10px; display: block; }
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Pochak</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+    *{box-sizing:border-box}
+    body{background:#000;color:#fff;margin:0;padding:0;font-family:sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+    .top-bar{padding:4px;background:#111;border-bottom:1px solid #222;display:flex;gap:4px;align-items:center}
+    .tab-btn{padding:4px 10px;background:#222;color:#888;border:1px solid #333;border-radius:3px;cursor:pointer;font-size:11px;font-weight:bold}
+    .tab-btn.active{background:#0f0;color:#000;border-color:#0f0}
+    input{flex:1;padding:4px 8px;background:#000;border:1px solid #333;color:#0f0;font-size:12px;border-radius:3px}
+    .scan-btn{padding:4px 10px;background:#0f0;font-weight:bold;border:none;border-radius:3px;font-size:11px;cursor:pointer;color:#000}
+    .logout-btn{padding:4px 8px;background:#222;color:#888;border:1px solid #333;border-radius:3px;font-size:10px;text-decoration:none;white-space:nowrap;cursor:pointer;border:1px solid #333}
+    .logout-btn:hover{color:#0f0;border-color:#0f0}
+    .main-layout{display:flex;flex:1;overflow:hidden}
+    .side-menu{width:145px;min-width:145px;border-right:1px solid #222;overflow-y:auto;padding:3px;background:#080808}
+    .content-area{flex:1;padding:4px;background:#000;display:flex;flex-direction:column;align-items:center;overflow-y:auto}
+    .vod-item{background:#111;padding:4px;margin-bottom:3px;border:1px solid #222;border-radius:3px;cursor:pointer}
+    .vod-item:hover{border-color:#0f0}
+    .vod-thumb{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:2px;margin-bottom:3px;background:#222}
+    .vod-title{color:#fff;font-size:9px;line-height:1.2}
+    .date-label{color:#0f0;display:block;font-size:8px}
+    .sport-label{color:#888;display:block;font-size:8px;margin-bottom:2px}
+    .live-item{background:#111;padding:5px;margin-bottom:3px;border:1px solid #222;border-radius:3px;cursor:pointer;font-size:9px}
+    .live-item:hover,.live-item.active{border-color:#0f0}
+    .live-name{color:#fff;font-weight:bold;margin-bottom:2px}
+    .live-meta{color:#888;font-size:8px}
+    .live-status{color:#0f0;font-size:8px}
+    .reload-btn{width:100%;padding:5px;background:#222;border:1px solid #333;color:#0f0;border-radius:3px;cursor:pointer;font-size:9px;margin-bottom:3px}
+    .cam-btns{display:flex;gap:4px;flex-wrap:wrap;width:100%;max-width:500px;margin-bottom:6px}
+    .cam-btn{flex:1;padding:8px 4px;border:1px solid #444;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;min-width:60px;text-align:center;background:#111}
+    .cam-btn.active{border-width:2px}
+    video{width:100%;height:auto;max-height:70vh;background:#111;border:1px solid #333}
+    #v-name{color:#0f0;font-size:10px;margin:3px 0;text-align:center}
+    #loading{color:#0f0;font-size:11px;text-align:center;padding:10px;display:none}
+    #total-count{color:#888;font-size:9px;padding:3px;text-align:center}
+    .vod-search-bar{display:none;flex:1;gap:4px}
+    /* 로그인 화면 */
+    #login-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center}
+    .login-box{background:#111;border:1px solid #222;border-radius:8px;padding:28px;width:90%;max-width:380px}
+    .login-box h2{color:#0f0;text-align:center;margin:0 0 20px 0;font-size:16px}
+    .login-tabs{display:flex;gap:4px;margin-bottom:20px}
+    .login-tab{flex:1;padding:8px;background:#222;border:1px solid #333;border-radius:4px;cursor:pointer;font-size:12px;text-align:center;color:#888}
+    .login-tab.active{background:#0f0;color:#000;border-color:#0f0;font-weight:bold}
+    .login-panel{display:none}
+    .login-panel.active{display:block}
+    .field{margin-bottom:10px}
+    .field label{display:block;color:#888;font-size:11px;margin-bottom:3px}
+    .field input{width:100%;padding:10px;background:#000;border:1px solid #333;color:#0f0;border-radius:4px;font-size:14px}
+    .field input:focus{border-color:#0f0;outline:none}
+    .login-btn{width:100%;padding:10px;background:#0f0;border:none;border-radius:4px;font-weight:bold;font-size:14px;cursor:pointer;color:#000;margin-top:4px}
+    .err-msg{color:#f00;font-size:12px;text-align:center;margin-bottom:10px;padding:8px;background:#f001;border:1px solid #f003;border-radius:4px;display:none}
+    .register-link{color:#0f0;text-decoration:none;font-size:12px;display:block;text-align:center;margin-top:10px}
+    /* 서비스 중단 */
+    #service-off-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:9999;align-items:center;justify-content:center;flex-direction:column;text-align:center}
+    #service-off-overlay h2{color:#f00;margin-bottom:10px}
+    #service-off-overlay p{color:#888;font-size:13px}
+    /* 비밀번호 변경 */
+    #pw-change-screen{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9998;align-items:center;justify-content:center}
+</style>
+</head><body>
 
-        video { width: 100%; border-radius: 12px; background: #000; margin-bottom: 20px; outline: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        
-        .controls { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
-        select { padding: 12px 15px; border-radius: 8px; font-size: 15px; font-weight: bold; background: #333; color: white; border: 1px solid #555; cursor: pointer; outline: none; transition: 0.2s; }
-        select:hover { border-color: #777; }
-        
-        button { padding: 12px 28px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .btn-download { background: #2979ff; color: white; }
-        .btn-download:hover { background: #1565c0; }
-        button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
-        
-        #progress { margin-top: 20px; font-size: 14px; color: #00e676; display: none; font-weight: bold; background: rgba(0, 230, 118, 0.1); padding: 10px; border-radius: 8px; }
-        
-        @media (max-width: 600px) {
-            .cheer-title { font-size: 1.2rem; }
-            .cheer-subtitle { font-size: 0.9rem; }
-            .controls { flex-direction: column; width: 100%; }
-            select, button { width: 100%; }
-        }
-    </style>
-</head>
-<body>
+<!-- 서비스 중단 오버레이 -->
+<div id="service-off-overlay">
+    <h2>🚫 서비스 중단</h2>
+    <p>관리자에 의해 서비스가 중단되었습니다.</p>
+    <a href="#" onclick="doLogout()" style="color:#0f0;margin-top:20px;display:block">로그아웃</a>
+</div>
 
-<div class="player-card">
-    <div class="cheer-message">
-        <div class="cheer-title">
-            <span class="cheer-highlight"></span>
+<!-- 로그인 화면 -->
+<div id="login-screen">
+    <div class="login-box">
+        <h2 id="login-title">📡 Pochak</h2>
+        <div class="err-msg" id="err-msg"></div>
+        <div class="login-tabs">
+            <div class="login-tab active" onclick="showLoginTab('code',this)">🔑 코드 입장</div>
+            <div class="login-tab" onclick="showLoginTab('user',this)">👤 ID/PW 로그인</div>
         </div>
-        <div class="cheer-subtitle">
-            세상에서 가장 멋진 팔달 리틀 선수들의 도전을 언제나 응원합니다.<br>
-            <span class="cheer-fighting">팔달 리틀 화이팅! 🔥</span>
+        <div class="login-panel active" id="login-code">
+            <div class="field"><label>입장 코드</label><input id="code-input" placeholder="코드를 입력하세요" autocomplete="off"></div>
+            <button class="login-btn" onclick="loginCode()">입장하기</button>
+        </div>
+        <div class="login-panel" id="login-user">
+            <div class="field"><label>아이디</label><input id="username-input" placeholder="아이디"></div>
+            <div class="field"><label>비밀번호</label><input id="password-input" type="password" placeholder="비밀번호"></div>
+            <button class="login-btn" onclick="loginUser()">로그인</button>
+        </div>
+        <a href="#" class="register-link" onclick="showRegister()">📝 ID 신청하기</a>
+    </div>
+</div>
+
+<!-- 신청 화면 -->
+<div id="register-screen" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;align-items:center;justify-content:center">
+    <div class="login-box">
+        <h2>📝 ID 신청</h2>
+        <div class="err-msg" id="reg-err-msg"></div>
+        <div class="field">
+            <label>아이디 신청</label>
+            <input id="reg-username" placeholder="예: 홍길동아빠, 이순신엄마, 김철수코치" autocomplete="off" maxlength="20">
+            <div style="color:#555;font-size:10px;margin-top:4px">예: 홍길동아빠, 이순신엄마, 김철수코치</div>
+        </div>
+        <button class="login-btn" onclick="doRegister()">신청하기</button>
+        <a href="#" class="register-link" onclick="showLogin()" style="color:#888">← 돌아가기</a>
+        <div style="color:#555;font-size:11px;text-align:center;margin-top:10px">승인 후 기본 비밀번호 0005로 로그인하세요</div>
+    </div>
+</div>
+
+<!-- 비밀번호 변경 화면 -->
+<div id="pw-change-screen">
+    <div class="login-box">
+        <h2>🔑 비밀번호 변경</h2>
+        <div style="color:#f00;font-size:12px;text-align:center;margin-bottom:12px;padding:8px;background:#f001;border:1px solid #f003;border-radius:4px">⚠ 기본 비밀번호를 변경해야 이용할 수 있습니다.</div>
+        <div class="err-msg" id="pw-err-msg"></div>
+        <div class="field"><label>새 비밀번호 (숫자 2자리 추천)</label><input id="new-pw" type="password" placeholder="새 비밀번호"></div>
+        <div class="field"><label>새 비밀번호 확인</label><input id="new-pw2" type="password" placeholder="비밀번호 확인"></div>
+        <button class="login-btn" onclick="doPwChange()">변경하기</button>
+    </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="app-screen" style="display:none;flex-direction:column;height:100vh">
+    <div class="top-bar">
+        <button class="tab-btn active" id="tab-live" onclick="switchTab('live')">📡 LIVE</button>
+        <button class="tab-btn" id="tab-vod" onclick="switchTab('vod')">🎬 VOD</button>
+        <div class="vod-search-bar" id="vod-search-bar">
+            <input type="text" id="kw" placeholder="팀명 또는 지역 검색">
+            <button class="scan-btn" onclick="loadVod()">스캔</button>
+        </div>
+        <button class="logout-btn" id="top-btn" onclick="topBtnClick()">👤</button>
+    </div>
+    <div class="main-layout">
+        <div class="side-menu" id="side-menu">
+            <div style="color:#555;font-size:9px;text-align:center;padding:10px">로딩중...</div>
+        </div>
+        <div class="content-area">
+            <h4 id="v-name"></h4>
+            <video id="video" controls autoplay playsinline></video>
+            <div id="loading">⏳ 로딩중...</div>
+            <div style="color:#444;font-size:10px;text-align:center;padding:4px">※ 오래된 영상은 재생이 안될 수 있습니다.</div>
+            <div class="cam-btns" id="cam-btns"></div>
         </div>
     </div>
-
-    <video id="video" controls playsinline></video>
-    
-    <div class="controls">
-        <select id="formatSelect">
-            <option value="ts">.TS (원본 권장)</option>
-            <option value="mp4">.MP4 (단순 확장자 변경)</option>
-        </select>
-        <button class="btn-download" id="downloadBtn" onclick="startDownload()">영상 다운로드</button>
-    </div>
-    
-    <div id="progress">준비 중...</div>
 </div>
 
 <script>
-    const video = document.getElementById('video');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const progressText = document.getElementById('progress');
-    const formatSelect = document.getElementById('formatSelect');
-    const m3u8Url = new URLSearchParams(window.location.search).get('url');
+const API = 'http://146.56.111.100:8766';
+const hls = new Hls();
+const video = document.getElementById('video');
+let curStreams = [];
+let sessionToken = localStorage.getItem('pochak_token');
+let currentUser = null;
 
-    if (m3u8Url) {
-        if (Hls.isSupported()) {
-            const hls = new Hls({ maxMaxBufferLength: 60, enableWorker: true });
-            hls.loadSource(m3u8Url);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-                    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-                    else hls.destroy();
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = m3u8Url;
+// 시작시 세션 체크
+window.onload = async () => {
+    if (sessionToken) {
+        await checkSession();
+    }
+};
+
+async function checkSession() {
+    try {
+        const resp = await fetch(API + '/api/check', {
+            headers: {'Authorization': 'Bearer ' + sessionToken}
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            currentUser = data.user;
+            showApp();
+        } else {
+            localStorage.removeItem('pochak_token');
+            sessionToken = null;
         }
+    } catch(e) {}
+}
+
+function showLoginTab(t, el) {
+    document.querySelectorAll('.login-tab').forEach(e=>e.classList.remove('active'));
+    document.querySelectorAll('.login-panel').forEach(e=>e.classList.remove('active'));
+    document.getElementById('login-'+t).classList.add('active');
+    el.classList.add('active');
+}
+
+function showErr(id, msg) {
+    const el = document.getElementById(id);
+    el.innerText = msg;
+    el.style.display = 'block';
+}
+
+function hideErr(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+async function loginCode() {
+    const code = document.getElementById('code-input').value.trim();
+    if (!code) return;
+    hideErr('err-msg');
+    try {
+        const resp = await fetch(API + '/api/login/code', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({code})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            sessionToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('pochak_token', sessionToken);
+            showApp();
+        } else {
+            showErr('err-msg', '⚠ ' + data.message);
+        }
+    } catch(e) { showErr('err-msg', '⚠ 서버 연결 오류'); }
+}
+
+async function loginUser() {
+    const username = document.getElementById('username-input').value.trim();
+    const password = document.getElementById('password-input').value;
+    if (!username || !password) return;
+    hideErr('err-msg');
+    try {
+        const resp = await fetch(API + '/api/login/user', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            sessionToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('pochak_token', sessionToken);
+            if (data.need_pw_change) {
+                showPwChange();
+            } else {
+                showApp();
+            }
+        } else {
+            showErr('err-msg', '⚠ ' + data.message);
+        }
+    } catch(e) { showErr('err-msg', '⚠ 서버 연결 오류'); }
+}
+
+async function doRegister() {
+    const username = document.getElementById('reg-username').value.trim();
+    if (!username) return;
+    hideErr('reg-err-msg');
+    try {
+        const resp = await fetch(API + '/api/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('register-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            showErr('err-msg', '✅ 신청 완료! 승인 후 이용 가능합니다.');
+            document.getElementById('err-msg').style.color = '#0f0';
+            document.getElementById('err-msg').style.background = '#0f01';
+            document.getElementById('err-msg').style.borderColor = '#0f03';
+        } else {
+            showErr('reg-err-msg', '⚠ ' + data.message);
+        }
+    } catch(e) { showErr('reg-err-msg', '⚠ 서버 연결 오류'); }
+}
+
+async function doPwChange() {
+    const newPw = document.getElementById('new-pw').value;
+    const newPw2 = document.getElementById('new-pw2').value;
+    hideErr('pw-err-msg');
+    if (newPw !== newPw2) { showErr('pw-err-msg', '⚠ 비밀번호가 일치하지 않습니다.'); return; }
+    if (newPw.length < 2) { showErr('pw-err-msg', '⚠ 너무 짧습니다.'); return; }
+    if (newPw === '0005') { showErr('pw-err-msg', '⚠ 기본 비밀번호와 다르게 설정해주세요.'); return; }
+    try {
+        const resp = await fetch(API + '/api/change-password', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+sessionToken},
+            body: JSON.stringify({new_pw: newPw})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('pw-change-screen').style.display = 'none';
+            showApp();
+        } else {
+            showErr('pw-err-msg', '⚠ ' + data.message);
+        }
+    } catch(e) { showErr('pw-err-msg', '⚠ 서버 연결 오류'); }
+}
+
+function showApp() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('register-screen').style.display = 'none';
+    document.getElementById('pw-change-screen').style.display = 'none';
+    const app = document.getElementById('app-screen');
+    app.style.display = 'flex';
+    // 상단 버튼
+    const isCode = currentUser && currentUser.type === 'code';
+    const btn = document.getElementById('top-btn');
+    if (isCode) {
+        btn.innerText = '🚪 로그아웃';
     } else {
-        progressText.style.display = 'block';
-        progressText.style.color = '#ff5252';
-        progressText.style.background = 'rgba(255, 82, 82, 0.1)';
-        progressText.innerText = "URL 파라미터가 없습니다. (?url=M3U8주소 형식으로 접속하세요)";
-        downloadBtn.disabled = true;
+        btn.innerText = '👤 ' + (currentUser && currentUser.label || '내 정보');
     }
+    loadLive();
+    // 30초마다 체크
+    setInterval(periodicCheck, 30000);
+}
 
-    // 날짜 추출 헬퍼 함수
-    function extractDate(text, url) {
-        // 1. M3U8 내부 태그에서 날짜 추출 시도 (예: 2023-10-27)
-        const dateFromTag = text.match(/#EXT-X-PROGRAM-DATE-TIME:([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-        if (dateFromTag) return dateFromTag[1];
+function showPwChange() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('pw-change-screen').style.display = 'flex';
+}
 
-        // 2. URL 주소에서 날짜 추출 시도 (예: 20231027, 2023-10-27, 2023_10_27)
-        // 20xx년 형태의 8자리 숫자를 찾습니다.
-        const dateFromUrl = url.match(/(20\d{2})[-_]?([0-1]\d)[-_]?([0-3]\d)/);
-        if (dateFromUrl) return `${dateFromUrl[1]}-${dateFromUrl[2]}-${dateFromUrl[3]}`;
+function showRegister() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('register-screen').style.display = 'flex';
+}
 
-        // 3. 둘 다 실패하면 기본 이름 반환
-        return "팔달리틀_경기영상";
+function showLogin() {
+    document.getElementById('register-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+}
+
+function topBtnClick() {
+    const isCode = currentUser && currentUser.type === 'code';
+    if (isCode) {
+        doLogout();
+    } else {
+        showMypage();
     }
+}
 
-    async function startDownload() {
-        if (!m3u8Url) return;
-        
-        const selectedFormat = formatSelect.value;
-        
-        if (navigator.userAgent.match(/Android|iPhone|iPad|iPod/i) && selectedFormat === 'mp4') {
-            if (!confirm("스마트폰에서는 .MP4로 저장 시 갤러리에서 재생이 안 될 수 있습니다.\n\n안정적인 시청을 원하시면 .TS 포맷을 권장합니다.\n\n그래도 MP4로 다운로드하시겠습니까?")) {
-                return;
+function doLogout() {
+    localStorage.removeItem('pochak_token');
+    sessionToken = null;
+    currentUser = null;
+    hls.detachMedia(); video.src = '';
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('service-off-overlay').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+}
+
+function showMypage() {
+    window.open(API + '/mypage-redirect?token=' + sessionToken, '_blank');
+}
+
+async function periodicCheck() {
+    try {
+        const resp = await fetch(API + '/api/check', {
+            headers: {'Authorization': 'Bearer ' + sessionToken}
+        });
+        if (resp.status === 401) {
+            const data = await resp.json();
+            if (data.reason === 'service_off') {
+                hls.detachMedia(); video.src = '';
+                document.getElementById('service-off-overlay').style.display = 'flex';
+            } else {
+                doLogout();
             }
+        } else {
+            document.getElementById('service-off-overlay').style.display = 'none';
         }
-        
-        downloadBtn.disabled = true;
-        formatSelect.disabled = true;
-        progressText.style.display = 'block';
-        progressText.style.color = '#00e676';
-        progressText.innerText = "M3U8 목록 분석 및 날짜 확인 중...";
+    } catch(e) {}
+}
 
-        try {
-            const response = await fetch(m3u8Url);
-            if (!response.ok) throw new Error("M3U8 파일을 가져오는 데 실패했습니다.");
-            const text = await response.text();
-            
-            // 날짜 추출 로직 실행!
-            const gameDate = extractDate(text, m3u8Url);
-            // 최종 파일명 조합 (예: 2023-10-27_팔달리틀.ts 또는 팔달리틀_경기영상.ts)
-            const finalFileName = gameDate === "팔달리틀_경기영상" ? gameDate : `${gameDate}_팔달리틀`;
-
-            const lines = text.split('\n').map(line => line.trim());
-            const tsUrls = lines.filter(line => line && !line.startsWith('#'));
-            
-            if (tsUrls.length === 0) {
-                alert("영상 조각을 찾을 수 없습니다.");
-                downloadBtn.disabled = false;
-                formatSelect.disabled = false;
-                progressText.innerText = "다운로드 불가";
-                return;
-            }
-
-            const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
-            let combinedBlob = new Array(tsUrls.length);
-
-            const CONCURRENCY_LIMIT = 5;
-            let downloadedCount = 0;
-
-            progressText.innerText = `조각 다운로드 준비 중... (총 ${tsUrls.length}개)`;
-
-            async function downloadWorker(iterator) {
-                for (let [index, url] of iterator) {
-                    const fullUrl = url.startsWith('http') ? url : baseUrl + url;
-                    try {
-                        const tsRes = await fetch(fullUrl);
-                        if (!tsRes.ok) throw new Error(`HTTP error! status: ${tsRes.status}`);
-                        const tsBlob = await tsRes.blob();
-                        combinedBlob[index] = tsBlob;
-                        
-                        downloadedCount++;
-                        progressText.innerText = `조각 다운로드 중... (${downloadedCount} / ${tsUrls.length})`;
-                    } catch (e) {
-                        console.error(`${index}번째 다운로드 실패`, e);
-                    }
-                }
-            }
-
-            const entries = tsUrls.entries();
-            const workers = Array(CONCURRENCY_LIMIT).fill(entries).map(downloadWorker);
-            await Promise.all(workers);
-
-            progressText.innerText = "파일 병합 중... (파일이 크면 잠시 멈출 수 있습니다)";
-            
-            const validBlobs = combinedBlob.filter(blob => blob !== undefined);
-            const mimeType = selectedFormat === 'mp4' ? 'video/mp4' : 'video/mp2t';
-            const finalBlob = new Blob(validBlobs, { type: mimeType });
-            const downloadUrl = URL.createObjectURL(finalBlob);
-            
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            // 여기서 추출된 날짜 기반 파일명이 적용됩니다!
-            a.download = `${finalFileName}.${selectedFormat}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            URL.revokeObjectURL(downloadUrl);
-            
-            progressText.innerText = "다운로드 완료! 🎉";
-        } catch (error) {
-            console.error(error);
-            progressText.style.color = '#ff5252';
-            progressText.innerText = "오류 발생: 네트워크 문제 또는 취소됨";
-        } finally {
-            downloadBtn.disabled = false;
-            formatSelect.disabled = false;
+function handleApiError(data) {
+    if (data && data.error) {
+        if (data.error === 'service_off') {
+            hls.detachMedia(); video.src = '';
+            document.getElementById('service-off-overlay').style.display = 'flex';
+        } else {
+            doLogout();
         }
+        return true;
     }
+    return false;
+}
+
+function authHeaders() {
+    return {'Authorization': 'Bearer ' + sessionToken};
+}
+
+function switchTab(tab) {
+    document.getElementById('tab-live').classList.toggle('active', tab==='live');
+    document.getElementById('tab-vod').classList.toggle('active', tab==='vod');
+    document.getElementById('vod-search-bar').style.display = tab==='vod' ? 'flex' : 'none';
+    document.getElementById('cam-btns').innerHTML = '';
+    document.getElementById('v-name').innerText = '';
+    hls.detachMedia(); video.src = '';
+    if (tab==='live') loadLive();
+    else document.getElementById('side-menu').innerHTML = '<div style="color:#555;font-size:9px;text-align:center;padding:10px">키워드 입력 후 스캔</div>';
+}
+
+async function loadLive() {
+    const menu = document.getElementById('side-menu');
+    menu.innerHTML = '<div style="color:#555;font-size:9px;text-align:center;padding:10px">로딩중...</div>';
+    try {
+        const resp = await fetch(API + '/api/live-list', {headers: authHeaders()});
+        const data = await resp.json();
+        if (handleApiError(data)) return;
+        if (!data.list.length) { menu.innerHTML = '<div style="color:#888;font-size:9px;text-align:center;padding:10px">현재 라이브 없음</div>'; return; }
+        menu.innerHTML = '<button class="reload-btn" onclick="loadLive()">🔄 새로고침</button>' +
+            data.list.map(v => `
+            <div class="live-item" onclick="grabLive(this,'${v.m_id}','${v.name}')">
+                <div class="live-status">● ${v.status}</div>
+                <div class="live-name">${v.name}</div>
+                <div class="live-meta">${v.sport} · ${v.park}</div>
+            </div>`).join('');
+    } catch(e) { menu.innerHTML = '<div style="color:#f00;font-size:9px;padding:10px">오류</div>'; }
+}
+
+async function grabLive(el, m_id, name) {
+    document.querySelectorAll('.live-item').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('v-name').innerText = name;
+    document.getElementById('cam-btns').innerHTML = '';
+    document.getElementById('loading').style.display = 'block';
+    try {
+        const resp = await fetch(API + '/api/get-live?m_id=' + m_id, {headers: authHeaders()});
+        const data = await resp.json();
+        document.getElementById('loading').style.display = 'none';
+        if (handleApiError(data)) return;
+        if (!data.streams.length) { document.getElementById('v-name').innerText = '스트림 없음'; return; }
+        curStreams = data.streams; renderCamBtns(); playStream(0);
+    } catch(e) { document.getElementById('loading').style.display = 'none'; }
+}
+
+async function loadVod() {
+    const kw = document.getElementById('kw').value;
+    if (!kw) return;
+    const menu = document.getElementById('side-menu');
+    menu.innerHTML = '<div style="color:#0f0;font-size:9px;text-align:center;padding:10px">⏳ 로딩중...</div>';
+    try {
+        const resp = await fetch(API + '/api/search-list?keyword=' + encodeURIComponent(kw), {headers: authHeaders()});
+        const data = await resp.json();
+        if (handleApiError(data)) return;
+        if (!data.list.length) { menu.innerHTML = '<div style="color:#f00;font-size:9px;text-align:center;padding:10px">결과 없음</div>'; return; }
+        menu.innerHTML = '<div id="total-count">총 ' + data.total + '개</div>' +
+            data.list.map(v => `
+            <div class="vod-item" onclick="grabVod(this,'${v.vod_id}','${v.match_id}','${v.line1} ${v.line2}')">
+                <img class="vod-thumb" src="${v.thumbnail}" onerror="this.style.display='none'" loading="lazy">
+                <div class="vod-title">
+                    <span class="sport-label">${v.sport} · ${v.competition}</span>
+                    <span class="date-label">${v.line1}</span>
+                    ${v.line2}
+                </div>
+            </div>`).join('');
+    } catch(e) { menu.innerHTML = '<div style="color:#f00;font-size:9px;padding:10px">오류</div>'; }
+}
+
+async function grabVod(el, vod_id, match_id, name) {
+    document.querySelectorAll('.vod-item').forEach(b => b.style.borderColor='#222');
+    el.style.borderColor = '#0f0';
+    document.getElementById('v-name').innerText = name;
+    document.getElementById('cam-btns').innerHTML = '';
+    document.getElementById('loading').style.display = 'block';
+    try {
+        const resp = await fetch(API + '/api/get-vod?vod_id=' + vod_id + '&match_id=' + match_id, {headers: authHeaders()});
+        const data = await resp.json();
+        document.getElementById('loading').style.display = 'none';
+        if (handleApiError(data)) return;
+        if (!data.streams.length) { document.getElementById('v-name').innerText = '스트림 없음'; return; }
+        curStreams = data.streams; renderCamBtns(); playStream(0);
+    } catch(e) { document.getElementById('loading').style.display = 'none'; }
+}
+
+const typeColor = {'중계':'#0f0','파노라마':'#0ff','하이라이트':'#ff0'};
+const typeIcon  = {'중계':'📺','파노라마':'🎥','하이라이트':'⚡'};
+const typeBg    = {'중계':'#001a00','파노라마':'#001a1a','하이라이트':'#1a1a00'};
+
+function renderCamBtns() {
+    document.getElementById('cam-btns').innerHTML = curStreams.map((s, si) => `
+        <button class="cam-btn" id="cam-${si}"
+            style="color:${typeColor[s.type]||'#0f0'};background:${typeBg[s.type]||'#111'};border-color:${typeColor[s.type]||'#0f0'}"
+            onclick="playStream(${si})">
+            ${typeIcon[s.type]||'📺'}<br>${s.type}
+        </button>`).join('');
+}
+
+function playStream(si) {
+    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+    const cb = document.getElementById('cam-'+si);
+    if(cb) cb.classList.add('active');
+    hls.detachMedia();
+    hls.loadSource(curStreams[si].url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { hls.currentLevel = -1; video.play(); });
+    window.scrollTo(0,0);
+}
 </script>
-
-</body>
-</html>
+</body></html>
