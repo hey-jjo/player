@@ -144,7 +144,7 @@
 </div>
 
 <script>
-const API = 'http://146.56.111.100:8766';
+const API = 'https://pochakplay.duckdns.org';
 const hls = new Hls();
 const video = document.getElementById('video');
 let curStreams = [];
@@ -395,7 +395,7 @@ async function loadLive() {
     const menu = document.getElementById('side-menu');
     menu.innerHTML = '<div style="color:#555;font-size:9px;text-align:center;padding:10px">로딩중...</div>';
     try {
-        const resp = await fetch(API + '/api/live-list', {headers: authHeaders()});
+        const resp = await fetch(API + '/api/live-list-token', {headers: authHeaders()});
         const data = await resp.json();
         if (handleApiError(data)) return;
         if (!data.list.length) { menu.innerHTML = '<div style="color:#888;font-size:9px;text-align:center;padding:10px">현재 라이브 없음</div>'; return; }
@@ -416,7 +416,7 @@ async function grabLive(el, m_id, name) {
     document.getElementById('cam-btns').innerHTML = '';
     document.getElementById('loading').style.display = 'block';
     try {
-        const resp = await fetch(API + '/api/get-live?m_id=' + m_id, {headers: authHeaders()});
+        const resp = await fetch(API + '/api/get-live-token?m_id=' + m_id, {headers: authHeaders()});
         const data = await resp.json();
         document.getElementById('loading').style.display = 'none';
         if (handleApiError(data)) return;
@@ -431,7 +431,7 @@ async function loadVod() {
     const menu = document.getElementById('side-menu');
     menu.innerHTML = '<div style="color:#0f0;font-size:9px;text-align:center;padding:10px">⏳ 로딩중...</div>';
     try {
-        const resp = await fetch(API + '/api/search-list?keyword=' + encodeURIComponent(kw), {headers: authHeaders()});
+        const resp = await fetch(API + '/api/search-list-token?keyword=' + encodeURIComponent(kw), {headers: authHeaders()});
         const data = await resp.json();
         if (handleApiError(data)) return;
         if (!data.list.length) { menu.innerHTML = '<div style="color:#f00;font-size:9px;text-align:center;padding:10px">결과 없음</div>'; return; }
@@ -455,7 +455,7 @@ async function grabVod(el, vod_id, match_id, name) {
     document.getElementById('cam-btns').innerHTML = '';
     document.getElementById('loading').style.display = 'block';
     try {
-        const resp = await fetch(API + '/api/get-vod?vod_id=' + vod_id + '&match_id=' + match_id, {headers: authHeaders()});
+        const resp = await fetch(API + '/api/get-vod-token?vod_id=' + vod_id + '&match_id=' + match_id, {headers: authHeaders()});
         const data = await resp.json();
         document.getElementById('loading').style.display = 'none';
         if (handleApiError(data)) return;
